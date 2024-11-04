@@ -1,13 +1,8 @@
-// pages/index.tsx
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { FiLock, FiDollarSign, FiZap } from "react-icons/fi";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
-import { ParticleButton } from "@/components/ParticleButton";
-// import { SignupModal } from "@/features/auth/components/SignupModal";
 
 export const WalletButton = dynamic(
   async () =>
@@ -39,16 +34,7 @@ export default function LandingPage() {
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-xl font-extrabold text-tertiary">INVOICE</h1>
           <div className="flex items-center gap-4">
-            {/* <WalletButton /> */}
             <ParticleAuthButton />
-            {/* {connected && (
-              <Button
-                onClick={handleGetStarted}
-                className="bg-tertiary text-primary hover:bg-quaternary"
-              >
-                Get Started
-              </Button>
-            )} */}
           </div>
         </div>
       </nav>
@@ -63,23 +49,6 @@ export default function LandingPage() {
             Send & receive invoice payments in minutes for less than a penny
             anywhere in the world
           </p>
-          {/* {!connected ? (
-            <div className="flex justify-center">
-              <WalletMultiButton />
-            </div>
-          ) : (
-            <Button
-              onClick={handleGetStarted}
-              size="lg"
-              className="bg-tertiary text-primary hover:bg-quaternary"
-            >
-              Get Started Now
-            </Button>
-          )} */}
-
-          {/* <div className="flex justify-center">
-            <WalletMultiButton />
-          </div> */}
         </div>
 
         {/* Features */}
@@ -101,11 +70,6 @@ export default function LandingPage() {
           />
         </div>
       </main>
-      {/* Signup Modal */}
-      {/* <SignupModal
-        isOpen={isSignupOpen}
-        onClose={() => setIsSignupOpen(false)}
-      /> */}
     </div>
   );
 }

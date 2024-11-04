@@ -6,6 +6,7 @@ import { useRouter } from "next/router";
 import { Toaster } from "react-hot-toast";
 import { QueryClient } from "@tanstack/react-query";
 import "@/styles/globals.css";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 
 // Dynamically import components that use browser APIs
 const DynamicWalletProvider = dynamic(
@@ -57,22 +58,24 @@ function MyApp({ Component, pageProps }: AppProps) {
       client={queryClient}
       dehydratedState={pageProps.dehydratedState}
     >
-      <DynamicWalletProvider>
-        {isLandingPage ? (
-          <Component {...pageProps} />
-        ) : (
-          <DynamicLayout>
+      <AuthProvider>
+        <DynamicWalletProvider>
+          {isLandingPage ? (
             <Component {...pageProps} />
-          </DynamicLayout>
-        )}
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            className: "bg-tertiary text-primary",
-            duration: 4000,
-          }}
-        />
-      </DynamicWalletProvider>
+          ) : (
+            <DynamicLayout>
+              <Component {...pageProps} />
+            </DynamicLayout>
+          )}
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              className: "bg-tertiary text-primary",
+              duration: 4000,
+            }}
+          />
+        </DynamicWalletProvider>
+      </AuthProvider>
     </ReactQueryProvider>
   );
 }
