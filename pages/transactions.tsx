@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useTransactions } from "@/features/transactions/hooks/useTransactions";
-import { Layout } from "@/components/layout/Layout";
+import { Layout } from "@/components/Layout";
 
 export default function TransactionsPage() {
   const router = useRouter();

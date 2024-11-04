@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/popover";
 import { ChevronDown, Settings, LogOut } from "lucide-react";
 
-export function ParticleButton() {
+const ParticleButtonContent = () => {
   const { select, connecting, connected, wallet, disconnect } = useWallet();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -100,4 +100,6 @@ export function ParticleButton() {
       Login/Signup
     </Button>
   );
-}
+};
+
+export default ParticleButtonContent;

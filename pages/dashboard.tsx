@@ -1,4 +1,3 @@
-// pages/dashboard.tsx
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -6,8 +5,6 @@ import { FiPlus, FiUsers, FiActivity, FiGrid } from "react-icons/fi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 // import { useSquadsWallet } from "@/features/dashboard/hooks/useSquadsWallet";
-import { ParticleButton } from "@/components/layout/ParticleButton";
-import { Layout } from "@/components/layout/Layout";
 import { CreateTransactionModal } from "@/features/dashboard/components/CreateTransactionModal/index";
 
 export default function DashboardPage() {
@@ -60,19 +57,6 @@ export default function DashboardPage() {
 
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-md font-medium text-tertiary">Team</h3>
-            <FiUsers className="text-quaternary" />
-          </div>
-          {/* <div className="text-2xl font-bold text-tertiary">
-          {multisig?.members || None}
-          TODO
-        </div> */}
-
-          <div className="text-2xl font-bold text-tertiary">NA</div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
             <h3 className="text-md font-medium text-tertiary">
               Transactions this Month
             </h3>
@@ -82,6 +66,32 @@ export default function DashboardPage() {
             {/* TODO: Add actual count */}0
           </div>
         </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-md font-medium text-tertiary">
+              Yield Earnings{" "}
+            </h3>
+            <div className="text-sm text-quaternary">YTD</div>
+          </div>
+          <div className="text-2xl font-bold text-tertiary">
+            {/* TODO: Add actual balance */}
+            0.00 USDC
+          </div>
+        </Card>
+
+        {/* <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-md font-medium text-tertiary">Team</h3>
+            <FiUsers className="text-quaternary" />
+          </div>
+          <div className="text-2xl font-bold text-tertiary">
+          {multisig?.members || None}
+
+        </div>
+
+          <div className="text-2xl font-bold text-tertiary">NA</div>
+        </Card> */}
       </div>
 
       <Card className="p-6">

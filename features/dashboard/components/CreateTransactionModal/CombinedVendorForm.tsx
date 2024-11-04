@@ -122,7 +122,10 @@ export function CombinedVendorForm({
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[85.5vw] p-0">
+                      <PopoverContent
+                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                        align="start"
+                      >
                         <Command>
                           <CommandInput
                             placeholder="Search vendors..."
@@ -163,11 +166,10 @@ export function CombinedVendorForm({
                   </FormItem>
                 )}
               />
-
               <Card className="bg-muted/50">
                 <CardContent className="p-4">
                   {!selectedVendor ? (
-                    <div className="text-sm text-muted-foreground p-4">
+                    <div className="text-sm text-muted-foreground justify-center py-6 items-center text-center">
                       Please select a vendor to view details
                     </div>
                   ) : isLoading ? (
@@ -329,7 +331,7 @@ export function CombinedVendorForm({
         </div>
 
         {/* Fixed button at bottom */}
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-background border-t mt-auto">
+        <div className="fixed bottom-0 left-0 right-0 p-6 bg-background mt-auto">
           <Button type="submit" form="vendor-form" className="w-full">
             Next
           </Button>

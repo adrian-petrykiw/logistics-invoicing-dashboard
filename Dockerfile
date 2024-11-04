@@ -1,31 +1,26 @@
-# Build stage
-FROM --platform=linux/amd64 node:20-slim AS builder
+# Use the official Node.js image as the base image
+FROM --platform=linux/amd64 node:20-slim
+
+# Set the working directory inside the container
 WORKDIR /app
+
+# Copy the package.json and package-lock.json files
+COPY package*.json ./
 
 # Install dependencies
-COPY package*.json ./
 RUN npm install
 
-# Copy source
+# Copy the rest of the application files
 COPY . .
 
-# Build application
+# Build the Next.js app
 RUN npm run build
 
-# Production stage
-FROM --platform=linux/amd64 node:20-slim AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-ENV PORT=3000
-
-# Copy necessary files from builder
-COPY --from=builder /app/next.config.js ./
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-
+# Expose port 3000 for the application
 EXPOSE 3000
 
-# Start the application
-CMD ["node", "server.js"]
+# Set the environment variable for production
+ENV NODE_ENV=production
+
+# Start the Next.js application
+CMD ["npm", "start"]

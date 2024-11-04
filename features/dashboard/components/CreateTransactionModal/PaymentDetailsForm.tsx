@@ -357,7 +357,7 @@ export function PaymentDetailsForm({
           </form>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-background border-t mt-auto">
+        <div className="fixed bottom-0 left-0 right-0 p-6 bg-background mt-auto">
           <div className="flex gap-4">
             <Button
               type="button"

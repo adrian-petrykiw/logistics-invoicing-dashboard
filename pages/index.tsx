@@ -6,7 +6,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
-import { ParticleButton } from "@/components/layout/ParticleButton";
+import { ParticleButton } from "@/components/ParticleButton";
 // import { SignupModal } from "@/features/auth/components/SignupModal";
 
 export const WalletButton = dynamic(
@@ -17,9 +17,7 @@ export const WalletButton = dynamic(
 
 export const ParticleAuthButton = dynamic(
   async () =>
-    import("@/components/layout/ParticleButton").then(
-      (mod) => mod.ParticleButton
-    ),
+    import("@/components/ParticleButton").then((mod) => mod.ParticleButton),
   { ssr: false }
 );
 

@@ -1,4 +1,4 @@
-import { ParticleButton } from "@/components/layout/ParticleButton";
+import { ParticleButton } from "@/components/ParticleButton";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { cn } from "@/lib/utils";

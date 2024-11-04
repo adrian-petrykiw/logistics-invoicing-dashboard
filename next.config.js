@@ -1,19 +1,35 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
   reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "shdw-drive.genesysgo.net",
+      },
+      {
+        protocol: "https",
+        hostname: "**",
+      },
+      {
+        protocol: "http",
+        hostname: "**",
+      },
+    ],
+  },
+  // experimental: {
+  //   outputStandalone: true,
+  // },
   webpack: (config, { isServer }) => {
-    config.resolve = {
-      ...config.resolve,
-      alias: {
-        ...config.resolve.alias,
-        "use-sync-external-store/shim": "use-sync-external-store/shim/index.js",
-      },
-      extensionAlias: {
-        ".js": [".js", ".ts", ".tsx"],
-        ".mjs": [".mjs", ".mts", ".mtsx"],
-      },
-    };
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    config.ignoreWarnings = [{ module: /node_modules\/punycode/ }];
     return config;
   },
 };
