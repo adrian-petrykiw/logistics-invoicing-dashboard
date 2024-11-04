@@ -9,19 +9,29 @@ import { PaymentDetailsForm } from "./PaymentDetailsForm";
 import { Confirmation } from "./Confirmation";
 import { Progress } from "@/components/ui/progress";
 import CombinedVendorForm from "./CombinedVendorForm";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useRouter } from "next/router";
 
 interface CreateTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  userWalletAddress: string;
 }
 
 export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
   isOpen,
   onClose,
+  userWalletAddress,
 }) => {
   const [step, setStep] = useState(0);
   const [vendorFormData, setVendorFormData] = useState<any>(null);
   const [paymentFormData, setPaymentFormData] = useState<any>(null);
+  const router = useRouter();
+
+  if (!userWalletAddress) {
+    router.push("/");
+    return null;
+  }
 
   const handleClose = () => {
     onClose();
@@ -47,7 +57,12 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
   const steps = [
     {
       title: "1. Vendor & Shipping Details",
-      component: <CombinedVendorForm onNext={handleVendorSubmit} />,
+      component: (
+        <CombinedVendorForm
+          userWalletAddress={userWalletAddress}
+          onNext={handleVendorSubmit}
+        />
+      ),
     },
     {
       title: "2. Payment Details",
@@ -79,7 +94,7 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="w-full max-w-[90%] h-[90vh] p-0">
+      <DialogContent className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col">
         <div className="p-6 pb-0">
           <DialogHeader>
             <DialogTitle className="text-2xl">Create Transaction</DialogTitle>
@@ -100,8 +115,10 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
           <Progress value={progressPercentage} className="w-full mt-2" />
         </div>
 
-        <div className="flex flex-col flex-1 h-[calc(90vh-180px)] px-6">
-          <div className="flex-1 overflow-y-auto">{steps[step].component}</div>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-6">
+            {steps[step].component}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

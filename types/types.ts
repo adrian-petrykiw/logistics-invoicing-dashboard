@@ -11,3 +11,17 @@ export interface ParsedMultisigAccount {
   publicKey: PublicKey;
   account: MultisigAccount;
 }
+export interface CustomField {
+  name: string;
+  required: boolean;
+  type: "text" | "number" | "date";
+  key: string;
+}
+
+export interface VendorDetails {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  customFields: CustomField[];
+}

@@ -12,7 +12,7 @@ import { CreateTransactionModal } from "@/features/dashboard/components/CreateTr
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { connected } = useWallet();
+  const { connected, publicKey } = useWallet();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   //   const { multisig, isLoading } = useSquadsWallet();
 
@@ -33,44 +33,34 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="container mx-auto py-8">
+    <main className="container mx-auto py-8 ">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-xl font-bold text-tertiary">Account Info</h1>
         <Button
           onClick={() => setIsCreateModalOpen(true)}
           className="bg-tertiary text-primary hover:bg-quaternary"
         >
-          <FiPlus className="mr-2" /> New Transaction
+          New Transaction <FiPlus />
         </Button>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6 mb-8">
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-tertiary">Balance</h3>
-            <div className="text-quaternary">USD</div>
+            <h3 className="text-md font-medium text-tertiary">
+              Current Balance{" "}
+            </h3>
+            <div className="text-sm text-quaternary">$0.00 USD</div>
           </div>
           <div className="text-2xl font-bold text-tertiary">
             {/* TODO: Add actual balance */}
-            $0.00
+            0.00 USDC
           </div>
         </Card>
 
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-tertiary">
-              Transactions this Month
-            </h3>
-            <FiActivity className="text-quaternary" />
-          </div>
-          <div className="text-2xl font-bold text-tertiary">
-            {/* TODO: Add actual count */}0
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-tertiary">Team</h3>
+            <h3 className="text-md font-medium text-tertiary">Team</h3>
             <FiUsers className="text-quaternary" />
           </div>
           {/* <div className="text-2xl font-bold text-tertiary">
@@ -80,9 +70,20 @@ export default function DashboardPage() {
 
           <div className="text-2xl font-bold text-tertiary">NA</div>
         </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-md font-medium text-tertiary">
+              Transactions this Month
+            </h3>
+            <FiActivity className="text-quaternary" />
+          </div>
+          <div className="text-2xl font-bold text-tertiary">
+            {/* TODO: Add actual count */}0
+          </div>
+        </Card>
       </div>
 
-      {/* Recent Activity */}
       <Card className="p-6">
         <h2 className="text-xl font-semibold text-tertiary mb-4">
           Recent Activity
@@ -91,10 +92,10 @@ export default function DashboardPage() {
         <div className="text-quaternary">No recent activity</div>
       </Card>
 
-      {/* Create Transaction Modal */}
       <CreateTransactionModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        userWalletAddress={publicKey?.toString() || ""} // Pass wallet address
       />
     </main>
   );

@@ -132,11 +132,11 @@ export function Confirmation({
         </div>
       </div>
 
-      <div className="sticky bottom-0 bg-background pt-6 border-t mt-auto">
+      <div className="fixed bottom-0 left-0 right-0 p-6 bg-background border-t mt-auto">
         <div className="flex gap-4">
           <Button
             onClick={onBack}
-            className="flex-1 bg-gray-100  hover:bg-gray-200 text-gray-700"
+            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700"
             variant="secondary"
           >
             Back

@@ -33,7 +33,7 @@ const initializeParticle = (): ParticleNetwork | undefined => {
 };
 
 function MyApp({ Component, pageProps }: AppProps) {
-  const router = useRouter(); // Use hook instead of import
+  const router = useRouter();
   const [queryClient] = useState(
     () =>
       new QueryClient({
