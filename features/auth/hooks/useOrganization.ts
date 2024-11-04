@@ -1,30 +1,36 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/hooks/api";
-import { CreateOrganizationInput, Organization } from "@/schemas/orgSchemas";
+import { useApi } from "@/hooks/useApi";
+import {
+  CreateOrganizationInput,
+  Organization,
+} from "@/schemas/organizationSchemas";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "./useAuth";
 
 export const useOrganization = (userId: string) => {
+  const api = useApi();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-  const { data: organization, isLoading } = useQuery({
-    queryKey: ["organization", userId],
+  const { data: organizations, isLoading } = useQuery({
+    queryKey: ["organizations", userId],
     queryFn: async () => {
-      const { data } = await api.get<Organization>("/organizations");
-      return data;
+      return api.get<Organization[]>("/organizations/me");
     },
+    enabled: !!userId,
   });
 
   const createOrganization = useMutation({
     mutationFn: async (newOrg: CreateOrganizationInput) => {
-      const { data } = await api.post<Organization>("/organizations", newOrg);
-      return data;
+      return api.post<Organization>("/organizations", newOrg);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["organization"] });
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
     },
   });
 
   return {
-    organization,
+    organization: organizations?.[0], // Get first organization
+    organizations, // Keep the full list if needed
     isLoading,
     createOrganization,
   };

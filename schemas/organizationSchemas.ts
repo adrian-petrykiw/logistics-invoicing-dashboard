@@ -1,3 +1,4 @@
+// types/orgSchemas.ts
 import { z } from "zod";
 
 export const WalletAddressSchema = z
@@ -6,16 +7,16 @@ export const WalletAddressSchema = z
 
 export const EmailSchema = z.string().email("Invalid email address");
 
-// Role schema
 export const RoleSchema = z.enum(["owner", "admin", "user"]);
 
-// Business details schema
+// Updated Business details schema
 export const BusinessDetailsSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
+  companyAddress: z.string().optional(),
+  companyPhone: z.string().optional(),
+  companyEmail: EmailSchema.optional(),
   registrationNumber: z.string().optional(),
-  address: z.string().optional(),
   website: z.string().url().optional(),
-  phoneNumber: z.string().optional(),
 });
 
 // Organization schema
@@ -27,12 +28,14 @@ export const OrganizationSchema = z.object({
   created_at: z.string().datetime().optional(),
 });
 
-// Organization member schema
+// Organization member schema with email
 export const OrganizationMemberSchema = z.object({
   user_id: z.string(),
   organization_id: z.string().uuid(),
   role: RoleSchema,
-  personal_wallet: WalletAddressSchema,
+  wallet_address: WalletAddressSchema,
+  name: z.string().min(1, "Name is required"),
+  email: EmailSchema,
   created_at: z.string().datetime().optional(),
 });
 
@@ -40,12 +43,23 @@ export const OrganizationMemberSchema = z.object({
 export const CreateOrganizationInputSchema = OrganizationSchema.omit({
   id: true,
   created_at: true,
+}).extend({
+  owner_name: z.string().min(1, "Owner name is required"),
+  owner_email: EmailSchema,
+  owner_wallet_address: WalletAddressSchema,
 });
 
-export const AddMemberInputSchema = OrganizationMemberSchema.omit({
-  created_at: true,
-}).extend({
+export const AddMemberInputSchema = z.object({
+  name: z.string().min(1, "Name is required"),
   email: EmailSchema,
+  role: RoleSchema,
+  wallet_address: WalletAddressSchema,
+});
+
+export const UpdateMemberInputSchema = z.object({
+  role: RoleSchema,
+  name: z.string().min(1, "Name is required").optional(),
+  wallet_address: WalletAddressSchema.optional(),
 });
 
 // Export types
@@ -57,3 +71,4 @@ export type CreateOrganizationInput = z.infer<
   typeof CreateOrganizationInputSchema
 >;
 export type AddMemberInput = z.infer<typeof AddMemberInputSchema>;
+export type UpdateMemberInput = z.infer<typeof UpdateMemberInputSchema>;

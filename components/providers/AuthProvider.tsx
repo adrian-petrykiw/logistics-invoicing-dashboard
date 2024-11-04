@@ -5,13 +5,29 @@ import { AuthState } from "@/types/auth";
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const auth = useAuth();
+  const { user, isLoading, isAuthenticated, logout } = useAuth();
 
-  if (auth.isLoading) {
+  if (isLoading) {
     return <div>Loading...</div>;
   }
 
-  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
+  // Create a properly typed auth state object
+  const authState: AuthState = {
+    user: user
+      ? {
+          email: user.email,
+          walletAddress: user.walletAddress,
+          userInfo: user.userInfo,
+        }
+      : null,
+    isAuthenticated,
+    isLoading,
+    logout,
+  };
+
+  return (
+    <AuthContext.Provider value={authState}>{children}</AuthContext.Provider>
+  );
 }
 
 export function useAuthContext() {

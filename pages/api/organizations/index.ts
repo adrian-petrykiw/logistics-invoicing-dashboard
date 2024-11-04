@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { supabaseAdmin } from "../_lib/supabase";
-import { CreateOrganizationInputSchema } from "@/schemas/orgSchemas";
+import { CreateOrganizationInputSchema } from "@/schemas/organizationSchemas";
 
 export default async function handler(
   req: NextApiRequest,

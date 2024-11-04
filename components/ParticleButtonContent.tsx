@@ -8,7 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ChevronDown, Settings, LogOut } from "lucide-react";
+import { ChevronDown, Settings, LogOut, Store } from "lucide-react";
 
 const ParticleButtonContent = () => {
   const { select, connecting, connected, wallet, disconnect } = useWallet();
@@ -54,6 +54,10 @@ const ParticleButtonContent = () => {
     }
   }, [disconnect, router]);
 
+  const handleRegister = useCallback(() => {
+    router.push("/settings");
+  }, [router]);
+
   const handleSettings = useCallback(() => {
     router.push("/settings");
   }, [router]);
@@ -69,6 +73,15 @@ const ParticleButtonContent = () => {
         </PopoverTrigger>
         <PopoverContent className="w-48 p-2">
           <div className="flex flex-col gap-1">
+            <Button
+              variant="ghost"
+              className="flex items-center gap-2 justify-start"
+              onClick={handleRegister}
+            >
+              <Store className="h-4 w-4" />
+
+              <span>Register Vendor</span>
+            </Button>
             <Button
               variant="ghost"
               className="flex items-center gap-2 justify-start"

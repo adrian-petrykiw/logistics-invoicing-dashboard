@@ -5,12 +5,14 @@ export interface ParticleUserInfo {
   wallet_address?: string;
 }
 
+export interface AuthUser {
+  email: string;
+  walletAddress: string;
+  userInfo: ParticleUserInfo;
+}
+
 export interface AuthState {
-  user: {
-    email: string;
-    walletAddress: string;
-    userInfo: ParticleUserInfo;
-  } | null;
+  user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   logout: () => Promise<void>;

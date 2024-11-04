@@ -1,15 +1,16 @@
+// pages/api/organizations/[id]/members.ts
 import { NextApiRequest, NextApiResponse } from "next";
 import { supabaseAdmin } from "../../_lib/supabase";
-import { AddMemberInputSchema } from "@/schemas/orgSchemas";
+import { AddMemberInputSchema } from "@/schemas/organizationSchemas";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { id } = req.query;
-  const userId = req.headers["x-supabase-user-id"] as string;
+  const { id: organizationId } = req.query;
+  const userEmail = req.headers["x-user-email"] as string;
 
-  if (!userId) {
+  if (!userEmail) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
@@ -17,9 +18,16 @@ export default async function handler(
     // Check if user has permission (owner/admin)
     const { data: membership, error: membershipError } = await supabaseAdmin
       .from("organization_members")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("organization_id", id)
+      .select(
+        `
+        role,
+        users!inner (
+          email
+        )
+      `
+      )
+      .eq("organization_id", organizationId)
+      .eq("users.email", userEmail)
       .single();
 
     if (
@@ -32,26 +40,41 @@ export default async function handler(
 
     switch (req.method) {
       case "GET":
+        // Get all members with their user details
         const { data: members, error: getError } = await supabaseAdmin
           .from("organization_members")
           .select(
             `
             *,
             users (
+              id,
               email,
+              name,
               wallet_address
             )
           `
           )
-          .eq("organization_id", id);
+          .eq("organization_id", organizationId);
 
         if (getError) throw getError;
-        return res.status(200).json(members);
+
+        // Transform the response to flatten user details
+        const formattedMembers = members?.map((member) => ({
+          id: member.user_id,
+          email: member.users.email,
+          name: member.users.name,
+          role: member.role,
+          wallet_address: member.wallet_address,
+          created_at: member.created_at,
+          organization_id: member.organization_id,
+        }));
+
+        return res.status(200).json(formattedMembers);
 
       case "POST":
         const validatedData = AddMemberInputSchema.parse(req.body);
 
-        // Check if user exists, if not create them
+        // Check if user exists
         const { data: existingUser, error: userError } = await supabaseAdmin
           .from("users")
           .select()
@@ -60,13 +83,15 @@ export default async function handler(
 
         let targetUserId = existingUser?.id;
 
+        // Create new user if doesn't exist
         if (!targetUserId) {
           const { data: newUser, error: createUserError } = await supabaseAdmin
             .from("users")
             .insert({
               email: validatedData.email,
-              wallet_address: validatedData.personal_wallet,
-              particle_user_id: "pending", // They'll update this when they sign in
+              name: validatedData.name,
+              wallet_address: validatedData.wallet_address,
+              particle_user_id: "pending", // Will be updated when they sign in
             })
             .select()
             .single();
@@ -75,22 +100,67 @@ export default async function handler(
           targetUserId = newUser.id;
         }
 
+        // Check if member already exists
+        const { data: existingMember } = await supabaseAdmin
+          .from("organization_members")
+          .select()
+          .eq("user_id", targetUserId)
+          .eq("organization_id", organizationId)
+          .single();
+
+        if (existingMember) {
+          return res.status(400).json({
+            error: "User is already a member of this organization",
+          });
+        }
+
+        // Create organization member
         const { data: newMember, error: createError } = await supabaseAdmin
           .from("organization_members")
           .insert({
             user_id: targetUserId,
-            organization_id: id as string,
+            organization_id: organizationId as string,
             role: validatedData.role,
-            personal_wallet: validatedData.personal_wallet,
+            wallet_address: validatedData.wallet_address,
           })
-          .select()
+          .select(
+            `
+            *,
+            users (
+              id,
+              email,
+              name,
+              wallet_address
+            )
+          `
+          )
           .single();
 
         if (createError) throw createError;
-        return res.status(201).json(newMember);
+
+        // Format response
+        const formattedMember = {
+          id: newMember.user_id,
+          email: newMember.users.email,
+          name: newMember.users.name,
+          role: newMember.role,
+          wallet_address: newMember.wallet_address,
+          created_at: newMember.created_at,
+          organization_id: newMember.organization_id,
+        };
+
+        return res.status(201).json(formattedMember);
+
+      case "PATCH":
+        // Handle member updates...
+        break;
+
+      case "DELETE":
+        // Handle member removal...
+        break;
 
       default:
-        res.setHeader("Allow", ["GET", "POST"]);
+        res.setHeader("Allow", ["GET", "POST", "PATCH", "DELETE"]);
         return res.status(405).end(`Method ${req.method} Not Allowed`);
     }
   } catch (error) {
