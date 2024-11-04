@@ -97,7 +97,7 @@ export default function LandingPage() {
           <FeatureCard
             icon={<FiLock className="w-8 h-8" />}
             title="Secure"
-            description="Manage your team, set spending limits, batch transactions"
+            description="Manage your team's permissions, set spending limits, and batch transactions"
           />
         </div>
       </main>
