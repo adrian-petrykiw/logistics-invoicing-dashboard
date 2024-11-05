@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "react-hot-toast";
 import { PublicKey } from "@solana/web3.js";
 import { UseMutationResult } from "@tanstack/react-query";
+import { usePayment } from "../hooks/usePayment";
 
 interface CreateMultisigResult {
   multisigPda: PublicKey;
@@ -70,6 +71,7 @@ export function VendorRegistrationModal({
   const [step, setStep] = useState<"details" | "processing">("details");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formDisabled, setFormDisabled] = useState(false);
+  const { checkPaymentStatus } = usePayment();
 
   useEffect(() => {
     const checkPaymentComplete = async () => {
@@ -82,36 +84,45 @@ export function VendorRegistrationModal({
 
       if (router.query.payment === "complete") {
         const storedDataString = localStorage.getItem("vendorRegistrationData");
-        console.log("Payment marked complete, checking stored data:", {
-          hasStoredData: !!storedDataString,
-          storedData: storedDataString,
-        });
-        console.log("Found stored registration data:", storedDataString);
 
         if (storedDataString && publicKey) {
           try {
             const parsedData = JSON.parse(storedDataString);
-            console.log("Processing stored data:", parsedData);
-            await handleRedirectPaymentComplete(parsedData);
+
+            // Check payment status with Coinbase
+            const isPaymentSuccess = await checkPaymentStatus(
+              parsedData.partnerUserId
+            );
+
+            if (isPaymentSuccess) {
+              console.log("Payment verified, proceeding with registration");
+              await handleRedirectPaymentComplete(parsedData);
+            } else {
+              console.log("Payment not verified yet");
+              toast.error("Payment verification failed. Please try again.");
+              setFormDisabled(false);
+              setIsSubmitting(false);
+            }
           } catch (error) {
             console.error("Failed to process payment completion:", error);
             toast.error("Failed to complete registration");
             setFormDisabled(false);
             setIsSubmitting(false);
           }
-        } else {
-          // console.log("Missing required data:", {
-          //   hasStoredData: !!storedDataString,
-          //   hasPublicKey: !!publicKey,
-          // });
-
-          console.log("Payment not complete or missing payment parameter");
         }
       }
     };
 
     checkPaymentComplete();
   }, [router.query.payment, publicKey]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsSubmitting(false);
+      setFormDisabled(false);
+      setStep("details");
+    }
+  }, [isOpen]);
 
   const handleInitialSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -308,8 +319,13 @@ export function VendorRegistrationModal({
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
                   <span>Processing...</span>
                 </div>
+              ) : formDisabled ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  <span>Waiting for payment...</span>
+                </div>
               ) : (
-                "Continue to Payment"
+                "Register"
               )}
             </Button>
           </form>

@@ -14,6 +14,7 @@ const ParticleButtonContent = () => {
   const { select, connecting, connected, wallet, disconnect } = useWallet();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleParticleConnect = useCallback(async () => {
     if (!connected && !connecting) {
@@ -45,8 +46,19 @@ const ParticleButtonContent = () => {
     }
   }, [connected, wallet?.adapter.name, router]);
 
+  const handleRegister = useCallback(() => {
+    setIsOpen(false); // Close popover
+    router.push("/settings");
+  }, [router]);
+
+  const handleSettings = useCallback(() => {
+    setIsOpen(false); // Close popover
+    router.push("/settings");
+  }, [router]);
+
   const handleLogout = useCallback(async () => {
     try {
+      setIsOpen(false); // Close popover
       await disconnect();
       router.push("/");
     } catch (error) {
@@ -54,17 +66,9 @@ const ParticleButtonContent = () => {
     }
   }, [disconnect, router]);
 
-  const handleRegister = useCallback(() => {
-    router.push("/settings");
-  }, [router]);
-
-  const handleSettings = useCallback(() => {
-    router.push("/settings");
-  }, [router]);
-
   if (connected && wallet?.adapter.name === "Particle") {
     return (
-      <Popover>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button variant="outline" className="flex items-center gap-2">
             <span className="truncate max-w-[200px]">{userEmail}</span>
@@ -79,7 +83,6 @@ const ParticleButtonContent = () => {
               onClick={handleRegister}
             >
               <Store className="h-4 w-4" />
-
               <span>Register Vendor</span>
             </Button>
             <Button
