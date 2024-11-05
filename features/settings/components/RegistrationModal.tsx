@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { FiPlus } from "react-icons/fi";
 import {
@@ -12,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "react-hot-toast";
-import axios from "axios";
 import { PublicKey } from "@solana/web3.js";
 import { UseMutationResult } from "@tanstack/react-query";
 
@@ -65,168 +65,254 @@ export function VendorRegistrationModal({
   createMultisig,
   createOrganization,
 }: VendorRegistrationModalProps) {
+  const router = useRouter();
   const { publicKey } = useWallet();
-  const [step, setStep] = useState<"details" | "payment" | "processing">(
-    "details"
-  );
-  const [formData, setFormData] = useState<FormData | null>(null);
-  const [iframeUrl, setIframeUrl] = useState<string | null>(null);
+  const [step, setStep] = useState<"details" | "processing">("details");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formDisabled, setFormDisabled] = useState(false);
+
+  useEffect(() => {
+    const checkPaymentComplete = async () => {
+      console.log("Payment status check triggered", {
+        fullUrl: window.location.href,
+        queryParams: router.query,
+        hasPaymentParam: "payment" in router.query,
+        paymentValue: router.query.payment,
+      });
+
+      if (router.query.payment === "complete") {
+        const storedDataString = localStorage.getItem("vendorRegistrationData");
+        console.log("Payment marked complete, checking stored data:", {
+          hasStoredData: !!storedDataString,
+          storedData: storedDataString,
+        });
+        console.log("Found stored registration data:", storedDataString);
+
+        if (storedDataString && publicKey) {
+          try {
+            const parsedData = JSON.parse(storedDataString);
+            console.log("Processing stored data:", parsedData);
+            await handleRedirectPaymentComplete(parsedData);
+          } catch (error) {
+            console.error("Failed to process payment completion:", error);
+            toast.error("Failed to complete registration");
+            setFormDisabled(false);
+            setIsSubmitting(false);
+          }
+        } else {
+          // console.log("Missing required data:", {
+          //   hasStoredData: !!storedDataString,
+          //   hasPublicKey: !!publicKey,
+          // });
+
+          console.log("Payment not complete or missing payment parameter");
+        }
+      }
+    };
+
+    checkPaymentComplete();
+  }, [router.query.payment, publicKey]);
 
   const handleInitialSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setFormDisabled(true);
     const data = new FormData(e.currentTarget);
-    setFormData(data);
+    const amount = parseFloat(data.get("amount") as string);
+
+    console.log("Starting registration process...");
+
+    // Validate amount
+    if (amount < 1 || amount > 500) {
+      toast.error("Amount must be between $1 and $500");
+      setIsSubmitting(false);
+      setFormDisabled(false);
+      return;
+    }
 
     try {
-      // Get session token and URL from our backend
-      //   const response = await axios.post("/api/onramp/token", {
-      //     walletAddress: publicKey?.toBase58(),
-      //   });
+      const partnerUserId = `${publicKey
+        ?.toBase58()
+        .slice(0, 15)}_${Date.now()}`.slice(0, 49);
 
-      //   setIframeUrl(response.data.onrampUrl);
+      const formData = {
+        ownerName: data.get("ownerName"),
+        companyName: data.get("companyName"),
+        companyAddress: data.get("companyAddress"),
+        companyPhone: data.get("companyPhone"),
+        companyEmail: data.get("companyEmail"),
+        amount: amount,
+        partnerUserId,
+      };
 
-      setIframeUrl(
-        'https://pay.coinbase.com/buy/select-asset?appId=7ed0c9d9-1e93-47bb-9ae5-f57b6f0207b5&addresses={"qWsuS2kxGbNxWKabVjJ6LvMgpCe6T5JghpqxDmn5RiJ":["solana"]}&assets=["USDC"]&presetFiatAmount=1&defaultExperience=buy&defaultPaymentMethod=CARD'
-      );
+      console.log("Storing form data:", formData);
+      localStorage.setItem("vendorRegistrationData", JSON.stringify(formData));
 
-      setStep("payment");
+      const redirectUrl = `${window.location.origin}/settings?payment=complete`;
+
+      const params = new URLSearchParams({
+        appId: "7ed0c9d9-1e93-47bb-9ae5-f57b6f0207b5",
+        addresses: JSON.stringify({
+          qWsuS2kxGbNxWKabVjJ6LvMgpCe6T5JghpqxDmn5RiJ: ["solana"],
+        }),
+        assets: JSON.stringify(["USDC"]),
+        presetFiatAmount: amount.toString(),
+        defaultExperience: "buy",
+        defaultPaymentMethod: "CARD",
+        fiatCurrency: "USD",
+        redirectUrl,
+        partnerUserId,
+        handlingRequestedUrls: "true",
+      });
+
+      const coinbaseUrl = `https://pay.coinbase.com/buy/select-asset?${params.toString()}`;
+      console.log("Redirecting to Coinbase:", coinbaseUrl);
+
+      const paymentWindow = window.open(coinbaseUrl, "_blank");
+      // if (!paymentWindow) {
+      //   window.location.href = coinbaseUrl;
+      // }
     } catch (error) {
       console.error("Payment initialization error:", error);
       toast.error("Failed to initialize payment");
+      setFormDisabled(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handlePaymentComplete = async () => {
-    if (!formData || !publicKey) return;
-
+  const handleRedirectPaymentComplete = async (storedData: any) => {
     try {
+      console.log("Starting organization creation process...");
       setStep("processing");
 
-      // Create multisig wallet
       const { multisigPda } = await createMultisig.mutateAsync({
-        creator: publicKey,
+        creator: publicKey!,
         email: userInfo?.email || "",
-        configAuthority: publicKey,
+        configAuthority: publicKey!,
       });
 
-      // Create organization with the new multisig
+      console.log("Multisig created:", multisigPda.toBase58());
+
       await createOrganization.mutateAsync({
-        name: formData.get("name") as string,
+        name: storedData.companyName,
         multisig_wallet: multisigPda.toBase58(),
-        owner_name: formData.get("ownerName") as string,
+        owner_name: storedData.ownerName,
         owner_email: userInfo?.email || "",
-        owner_wallet_address: publicKey.toBase58(),
+        owner_wallet_address: publicKey!.toBase58(),
         business_details: {
-          companyName: formData.get("companyName") as string,
-          companyAddress:
-            (formData.get("companyAddress") as string) || undefined,
-          companyPhone: (formData.get("companyPhone") as string) || undefined,
-          companyEmail: (formData.get("companyEmail") as string) || undefined,
+          companyName: storedData.companyName,
+          companyAddress: storedData.companyAddress,
+          companyPhone: storedData.companyPhone,
+          companyEmail: storedData.companyEmail,
         },
       });
 
+      console.log("Organization created successfully");
+      localStorage.removeItem("vendorRegistrationData");
+      router.replace("/settings", undefined, { shallow: true });
       onOpenChange(false);
       onSubmitSuccess();
       toast.success("Organization registered successfully!");
     } catch (error) {
-      toast.error("Failed to complete registration");
       console.error("Registration error:", error);
+      toast.error("Failed to complete registration");
       setStep("details");
+      setFormDisabled(false);
     }
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!formDisabled) {
+          onOpenChange(open);
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button>
           <FiPlus /> Register Vendor
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        aria-labelledby="dialog-title"
+        aria-describedby="dialog-description"
+      >
         <DialogHeader>
           <DialogTitle>Register Vendor</DialogTitle>
         </DialogHeader>
 
         {step === "details" && (
-          <>
-            <form onSubmit={handleInitialSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Your Full Name*</Label>
-                <Input name="ownerName" required />
-              </div>
-              <div className="space-y-2">
-                <Label>Organization Name*</Label>
-                <Input name="name" required />
-              </div>
-              <div className="space-y-2">
-                <Label>Company Name*</Label>
-                <Input name="companyName" required />
-              </div>
-              <div className="space-y-2">
-                <Label>Company Address*</Label>
-                <Input name="companyAddress" required />
-              </div>
+          <form onSubmit={handleInitialSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Your Full Name*</Label>
+              <Input name="ownerName" required disabled={formDisabled} />
+            </div>
+            <div className="space-y-2">
+              <Label>Company Name*</Label>
+              <Input name="companyName" required disabled={formDisabled} />
+            </div>
+            <div className="space-y-2">
+              <Label>Company Address*</Label>
+              <Input name="companyAddress" required disabled={formDisabled} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Company Phone</Label>
-                <Input name="companyPhone" type="tel" />
+                <Input name="companyPhone" type="tel" disabled={formDisabled} />
               </div>
               <div className="space-y-2">
                 <Label>Company Email</Label>
-                <Input name="companyEmail" type="email" />
+                <Input
+                  name="companyEmail"
+                  type="email"
+                  disabled={formDisabled}
+                />
               </div>
-
-              <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground mt-4">
-                <p>Notice:</p>
-                <ol className="list-decimal ml-4 mt-2 space-y-1">
-                  <li>
-                    In order to register as a verified vendor you must complete
-                    a quick USDC payment with your debit/credit card
-                  </li>
-                </ol>
-              </div>
-
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <span className="animate-spin mr-2">⭮</span>
-                    Preparing Payment...
-                  </>
-                ) : (
-                  "Continue to Payment"
-                )}
-              </Button>
-            </form>
-          </>
-        )}
-
-        {step === "payment" && iframeUrl && (
-          <div className="space-y-4">
-            <div className="text-sm text-muted-foreground">
-              Complete a USDC payment with your card to register as a vendor
             </div>
-            <div className="border rounded-lg overflow-hidden">
-              <iframe
-                src={iframeUrl}
-                className="w-full h-[600px]"
-                frameBorder="0"
-                onLoad={(e) => {
-                  // Listen for payment completion message
-                  window.addEventListener("message", (event) => {
-                    if (
-                      event.origin === "https://pay.coinbase.com" &&
-                      event.data.type === "onramp_purchase_completed"
-                    ) {
-                      handlePaymentComplete();
-                    }
-                  });
-                }}
+
+            <div className="space-y-2">
+              <Label>Amount (USDC)*</Label>
+              <Input
+                name="amount"
+                type="number"
+                min="1"
+                max="500"
+                step="0.01"
+                placeholder="Enter amount between $1-$500"
+                required
+                disabled={formDisabled}
               />
             </div>
-          </div>
+
+            <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground mt-4">
+              <p>
+                <span className="font-bold">Notice: </span>
+                To register as a verified vendor, you must complete a USDC
+                payment between $1-$500 with your debit/credit card. This amount
+                will be added to your credit balance.
+              </p>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isSubmitting || formDisabled}
+            >
+              {isSubmitting ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  <span>Processing...</span>
+                </div>
+              ) : (
+                "Continue to Payment"
+              )}
+            </Button>
+          </form>
         )}
 
         {step === "processing" && (

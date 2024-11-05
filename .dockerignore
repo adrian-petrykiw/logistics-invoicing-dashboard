@@ -1,0 +1,12 @@
+# Ignore node_modules
+node_modules
+
+# Ignore log files
+*.log
+
+# Ignore temporary files
+temp/
+*.tmp
+
+# Ignore any files that are not needed in the image
+.git

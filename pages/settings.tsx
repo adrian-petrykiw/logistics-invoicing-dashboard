@@ -137,41 +137,111 @@ export default function SettingsPage() {
     }
   }, [connected, wallet?.adapter.name]);
 
-  useEffect(() => {
-    if (!connected) {
-      router.push("/").catch(console.error);
-    }
-  }, [connected, router]);
+  // useEffect(() => {
+  //   // Check if we're returning from Coinbase payment
+  //   if (router.query.payment === "complete") {
+  //     const storedData = localStorage.getItem("vendorRegistrationData");
+  //     if (storedData) {
+  //       const formData = JSON.parse(storedData);
 
-  const handleCreateOrganization = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+  //       // Clear stored data
+  //       localStorage.removeItem("vendorRegistrationData");
+
+  //       // Create multisig and organization
+  //       handlePaymentComplete(formData);
+  //     }
+  //   }
+  // }, [router.query]);
+
+  // In your settings page
+  useEffect(() => {
+    const handlePaymentReturn = async () => {
+      if (router.query.payment === "complete") {
+        const storedData = localStorage.getItem("vendorRegistrationData");
+        if (storedData) {
+          try {
+            const formData = JSON.parse(storedData);
+            // Your handlePaymentComplete logic here
+            console.log(
+              "Payment completed, processing registration with data:",
+              formData
+            );
+
+            // Clear stored data after successful processing
+            localStorage.removeItem("vendorRegistrationData");
+          } catch (error) {
+            console.error("Error processing payment return:", error);
+            toast.error("Failed to complete registration");
+          }
+        }
+      }
+    };
+
+    handlePaymentReturn();
+  }, [router.query]);
+
+  const handlePaymentComplete = async (formData: any) => {
+    if (!publicKey) return;
 
     try {
+      // Create multisig wallet
+      const { multisigPda } = await createMultisig.mutateAsync({
+        creator: publicKey,
+        email: userInfo?.email || "",
+        configAuthority: publicKey,
+      });
+
+      // Create organization with the new multisig
       await createOrganization.mutateAsync({
-        name: formData.get("companyName") as string,
-        multisig_wallet: formData.get("multisigWallet") as string,
-        owner_name: formData.get("ownerName") as string,
+        name: formData.name,
+        multisig_wallet: multisigPda.toBase58(),
+        owner_name: formData.ownerName,
         owner_email: userInfo?.email || "",
-        owner_wallet_address: publicKey?.toBase58() || "",
+        owner_wallet_address: publicKey.toBase58(),
         business_details: {
-          companyName: formData.get("companyName") as string,
-          companyAddress:
-            (formData.get("companyAddress") as string) || undefined,
-          companyPhone: (formData.get("companyPhone") as string) || undefined,
-          companyEmail: (formData.get("companyEmail") as string) || undefined,
+          companyName: formData.companyName,
+          companyAddress: formData.companyAddress,
+          companyPhone: formData.companyPhone,
+          companyEmail: formData.companyEmail,
         },
       });
 
-      setIsCreateOrgModalOpen(false);
-      toast.success("Organization created successfully!");
+      toast.success("Organization registered successfully!");
     } catch (error) {
-      toast.error("Failed to create organization");
-      console.error("Create organization error:", error);
+      toast.error("Failed to complete registration");
+      console.error("Registration error:", error);
     }
   };
+
+  // const handleCreateOrganization = async (
+  //   e: React.FormEvent<HTMLFormElement>
+  // ) => {
+  //   e.preventDefault();
+  //   const formData = new FormData(e.currentTarget);
+
+  //   try {
+  //     await createOrganization.mutateAsync({
+  //       name: formData.get("companyName") as string,
+  //       multisig_wallet: formData.get("multisigWallet") as string,
+  //       owner_name: formData.get("ownerName") as string,
+  //       owner_email: userInfo?.email || "",
+  //       owner_wallet_address: publicKey?.toBase58() || "",
+  //       business_details: {
+  //         companyName: formData.get("companyName") as string,
+  //         companyAddress:
+  //           (formData.get("companyAddress") as string) || undefined,
+  //         companyPhone: (formData.get("companyPhone") as string) || undefined,
+  //         companyEmail: (formData.get("companyEmail") as string) || undefined,
+  //       },
+  //     });
+
+  //     setIsCreateOrgModalOpen(false);
+  //     toast.success("Organization created successfully!");
+  //   } catch (error) {
+  //     toast.error("Failed to create organization");
+  //     console.error("Create organization error:", error);
+  //   }
+  // };
 
   const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
