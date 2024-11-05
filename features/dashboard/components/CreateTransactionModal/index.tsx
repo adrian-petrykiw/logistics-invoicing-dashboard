@@ -11,6 +11,8 @@ import { Progress } from "@/components/ui/progress";
 import CombinedVendorForm from "./CombinedVendorForm";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/router";
+import { PaymentDetailsFormValues } from "@/schemas/paymentDetailsSchema";
+import { CombinedFormValues } from "@/schemas/combinedFormSchema";
 
 interface CreateTransactionModalProps {
   isOpen: boolean;
@@ -24,7 +26,8 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
   userWalletAddress,
 }) => {
   const [step, setStep] = useState(0);
-  const [vendorFormData, setVendorFormData] = useState<any>(null);
+  const [vendorFormData, setVendorFormData] =
+    useState<CombinedFormValues | null>(null);
   const [paymentFormData, setPaymentFormData] = useState<any>(null);
   const router = useRouter();
 
@@ -40,13 +43,18 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
     setPaymentFormData(null);
   };
 
-  const handleVendorSubmit = (data: any) => {
+  const handleVendorSubmit = (data: CombinedFormValues) => {
+    console.log("Vendor Data:", data);
     setVendorFormData(data);
     setStep(1);
   };
 
-  const handlePaymentSubmit = (data: any) => {
-    setPaymentFormData(data);
+  const handlePaymentSubmit = (
+    data: PaymentDetailsFormValues,
+    vendorData: CombinedFormValues
+  ) => {
+    console.log("Payment Data:", data);
+    setPaymentFormData({ ...data, amount: vendorData.amount });
     setStep(2);
   };
 
@@ -70,7 +78,7 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
         <PaymentDetailsForm
           onNext={handlePaymentSubmit}
           onBack={handleBack}
-          vendorFormData={vendorFormData}
+          vendorFormData={vendorFormData!}
         />
       ),
     },
@@ -80,7 +88,7 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
         <Confirmation
           onClose={onClose}
           onBack={handleBack}
-          vendorData={vendorFormData}
+          vendorData={vendorFormData!}
           paymentData={paymentFormData}
         />
       ),

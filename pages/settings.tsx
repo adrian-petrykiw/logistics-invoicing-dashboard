@@ -308,7 +308,7 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
         <div className="container mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold">Settings</h1>
+          <h1 className="text-xl font-bold">Settings</h1>
         </div>
       </header>
 

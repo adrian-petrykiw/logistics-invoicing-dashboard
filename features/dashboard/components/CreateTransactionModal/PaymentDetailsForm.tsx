@@ -23,36 +23,47 @@ import {
   PaymentDetailsFormValues,
   paymentDetailsSchema,
 } from "@/schemas/paymentDetailsSchema";
+import { Card, CardContent } from "@/components/ui/card";
 
 export function PaymentDetailsForm({
   onNext,
   onBack,
   vendorFormData,
 }: PaymentDetailsFormProps) {
-  const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
+  const totalAmount = vendorFormData?.amount || 0;
 
   const form = useForm<PaymentDetailsFormValues>({
     resolver: zodResolver(paymentDetailsSchema),
     defaultValues: {
       paymentMethod: "credit",
-      amount: vendorFormData?.amount || 0,
     },
   });
 
+  const selectedMethod = form.watch("paymentMethod");
+
   const onSubmit = (data: PaymentDetailsFormValues) => {
-    onNext(data);
+    onNext(data, vendorFormData);
   };
 
   return (
     <Form {...form}>
       <div className="flex flex-col h-full">
-        <div className="flex-1 overflow-y-auto pb-20">
+        <div className="flex-1 overflow-y-auto pb-24">
           <form
             id="payment-form"
             onSubmit={form.handleSubmit(onSubmit)}
             className="space-y-6"
           >
-            <h2 className="text-lg font-semibold">Payment Details</h2>
+            <Card className="bg-muted/50 rounded-lg mb-4 border-t">
+              <CardContent className="p-4 flex  w-full h-full items-center justify-between bg-red">
+                <h2 className="font-medium text-md">Total Payment Amount</h2>
+                <p className="text-lg font-bold">
+                  {totalAmount.toFixed(2)} USDC
+                </p>
+              </CardContent>
+            </Card>
+
+            <h2 className="text-lg font-semibold">Payment Method</h2>
 
             <div className="space-y-4">
               <FormField
@@ -60,11 +71,11 @@ export function PaymentDetailsForm({
                 name="paymentMethod"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Payment Method</FormLabel>
                     <Select
                       onValueChange={(value) => {
                         field.onChange(value);
-                        setSelectedMethod(value);
+                        // Remove this line
+                        // setSelectedMethod(value);
                       }}
                       defaultValue={field.value}
                     >
@@ -81,27 +92,6 @@ export function PaymentDetailsForm({
                         <SelectItem value="debit_card">Debit Card</SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="amount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Amount (in USDC)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        placeholder="Enter USDC amount"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseFloat(e.target.value))
-                        }
-                      />
-                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

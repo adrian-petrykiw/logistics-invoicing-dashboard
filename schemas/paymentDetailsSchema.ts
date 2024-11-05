@@ -1,39 +1,63 @@
 import { z } from "zod";
 
-export const paymentMethodSchema = z.enum([
-  "credit",
-  "ach",
-  "wire",
-  "credit_card",
-  "debit_card",
+// export const paymentMethodSchema = z.enum([
+//   "credit",
+//   "ach",
+//   "wire",
+//   "credit_card",
+//   "debit_card",
+// ]);
+
+export const paymentDetailsSchema = z.discriminatedUnion("paymentMethod", [
+  z.object({
+    paymentMethod: z.literal("credit"),
+  }),
+  z.object({
+    paymentMethod: z.literal("ach"),
+    accountName: z.string().nonempty("Account Name is required"),
+    routingNumber: z.string().nonempty("Routing Number is required"),
+    accountNumber: z.string().nonempty("Account Number is required"),
+    accountType: z.enum(["checking", "savings"]),
+  }),
+  z.object({
+    paymentMethod: z.literal("wire"),
+    bankName: z.string().nonempty("Bank Name is required"),
+    routingNumber: z.string().nonempty("Routing Number is required"),
+    accountNumber: z.string().nonempty("Account Number is required"),
+    swiftCode: z.string().optional(),
+  }),
+  z.object({
+    paymentMethod: z.literal("credit_card"),
+    cardNumber: z.string().nonempty("Card Number is required"),
+    expiryDate: z.string().nonempty("Expiry Date is required"),
+    cvv: z.string().nonempty("CVV is required"),
+    billingName: z.string().nonempty("Billing Name is required"),
+    billingAddress: z.string().nonempty("Billing Address is required"),
+    billingCity: z.string().nonempty("Billing City is required"),
+    billingState: z.string().nonempty("Billing State is required"),
+    billingZip: z.string().nonempty("Billing Zip is required"),
+  }),
+  z.object({
+    paymentMethod: z.literal("debit_card"),
+    cardNumber: z.string().nonempty("Card Number is required"),
+    expiryDate: z.string().nonempty("Expiry Date is required"),
+    cvv: z.string().nonempty("CVV is required"),
+    billingName: z.string().nonempty("Billing Name is required"),
+    billingAddress: z.string().nonempty("Billing Address is required"),
+    billingCity: z.string().nonempty("Billing City is required"),
+    billingState: z.string().nonempty("Billing State is required"),
+    billingZip: z.string().nonempty("Billing Zip is required"),
+  }),
 ]);
 
-export const paymentDetailsSchema = z.object({
-  paymentMethod: paymentMethodSchema,
-  amount: z.number().min(0, "Amount must be greater than 0"),
-  // ACH fields
-  accountName: z.string().optional(),
-  routingNumber: z.string().optional(),
-  accountNumber: z.string().optional(),
-  accountType: z.enum(["checking", "savings"]).optional(),
-  // Wire fields
-  bankName: z.string().optional(),
-  swiftCode: z.string().optional(),
-  // Card fields
-  cardNumber: z.string().optional(),
-  expiryDate: z.string().optional(),
-  cvv: z.string().optional(),
-  billingName: z.string().optional(),
-  billingAddress: z.string().optional(),
-  billingCity: z.string().optional(),
-  billingState: z.string().optional(),
-  billingZip: z.string().optional(),
-});
-
 export type PaymentDetailsFormValues = z.infer<typeof paymentDetailsSchema>;
+import { CombinedFormValues } from "@/schemas/combinedFormSchema";
 
 export interface PaymentDetailsFormProps {
-  onNext: (data: PaymentDetailsFormValues) => void;
+  onNext: (
+    data: PaymentDetailsFormValues,
+    vendorData: CombinedFormValues
+  ) => void;
   onBack: () => void;
-  vendorFormData: any;
+  vendorFormData: CombinedFormValues;
 }

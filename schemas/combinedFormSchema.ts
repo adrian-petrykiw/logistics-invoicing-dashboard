@@ -3,18 +3,18 @@ import { z } from "zod";
 
 export const invoiceSchema = z.object({
   number: z.string().min(1, "Invoice number is required"),
+  amount: z
+    .number({
+      invalid_type_error: "Invalid amount",
+      required_error: "Amount is required",
+    })
+    .min(0, "Amount must be greater than or equal to 0"),
 });
 
 const baseSchema = {
   vendor: z.string().min(1, "Please select a vendor"),
   invoices: z.array(invoiceSchema).min(1, "At least one invoice is required"),
   relatedBolAwb: z.string().optional(),
-  amount: z
-    .number({
-      invalid_type_error: "Invalid amount", // Custom error for invalid type
-      required_error: "Amount is required",
-    })
-    .min(0, "Invalid amount"),
   paymentDate: z.date(),
   additionalInfo: z.string().optional(),
 };

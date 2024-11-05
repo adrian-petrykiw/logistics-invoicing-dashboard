@@ -1,11 +1,16 @@
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useVendorDetails } from "@/hooks/useVendorDetails";
+import { CombinedFormValues } from "@/schemas/combinedFormSchema";
+import { PaymentDetailsFormValues } from "@/schemas/paymentDetailsSchema";
 
 interface ConfirmationProps {
   onClose: () => void;
   onBack: () => void;
-  vendorData: any;
-  paymentData: any;
+  vendorData: CombinedFormValues;
+  paymentData: PaymentDetailsFormValues & { amount: number };
 }
 
 export function Confirmation({
@@ -14,46 +19,65 @@ export function Confirmation({
   vendorData,
   paymentData,
 }: ConfirmationProps) {
+  const { data: vendorDetails, isLoading } = useVendorDetails(
+    vendorData?.vendor
+  );
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 space-y-6">
-        <div className="space-y-4">
+        <div className="space-y-4 pb-4">
           <h2 className="text-lg font-semibold">Vendor & Shipping Details</h2>
           <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col">
+              <p className="font-medium text-sm pb-2">Vendor</p>
+              <Card className="bg-muted/50 rounded-md">
+                <CardContent className="p-4">
+                  {!vendorData?.vendor ? (
+                    <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
+                      Vendor not found
+                    </div>
+                  ) : isLoading ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-2 w-[250px]" />
+                      <Skeleton className="h-2 w-[200px]" />
+                      <Skeleton className="h-2 w-[150px]" />
+                    </div>
+                  ) : vendorDetails ? (
+                    <div className="p-0 m-0">
+                      <h4 className="font-semibold text-sm">
+                        {vendorDetails.name}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        {vendorDetails.address}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {vendorDetails.phone}
+                      </p>
+                    </div>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </div>
             <div>
-              <p className="font-medium text-sm">Vendor</p>
-              <p className="text-sm text-muted-foreground">
-                {vendorData?.vendor}
+              <div className="flex justify-between">
+                <p className="font-medium text-sm mb-2">Invoices</p>
+              </div>{" "}
+              <p className="text-sm text-muted-foreground space-y-2">
+                {vendorData?.invoices.map((invoice, index) => (
+                  <Card className="bg-muted/50 rounded-md">
+                    <CardContent className="flex w-full justify-between items-center h-full m-0 px-4 py-2">
+                      <p>#{invoice.number}</p>
+                      <p>{invoice.amount} USDC</p>
+                    </CardContent>
+                  </Card>
+                ))}
               </p>
             </div>
             <div>
-              <p className="font-medium text-sm">Bill of Lading</p>
+              <p className="font-medium text-sm mb-2">Related BOL/AWB #</p>
               <p className="text-sm text-muted-foreground">
-                {vendorData?.billOfLading}
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-sm">Sender</p>
-              <p className="text-sm text-muted-foreground">
-                {vendorData?.sender}
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-sm">Receiver</p>
-              <p className="text-sm text-muted-foreground">
-                {vendorData?.receiver}
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-sm">Origin</p>
-              <p className="text-sm text-muted-foreground">
-                {vendorData?.origin}
-              </p>
-            </div>
-            <div>
-              <p className="font-medium text-sm">Destination</p>
-              <p className="text-sm text-muted-foreground">
-                {vendorData?.destination}
+                {vendorData?.relatedBolAwb}
               </p>
             </div>
           </div>
@@ -65,15 +89,18 @@ export function Confirmation({
           <h2 className="text-lg font-semibold">Payment Details</h2>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="font-medium text-sm">Payment Method</p>
+              <p className="font-medium text-sm mb-2">Payment Method</p>
               <p className="text-sm text-muted-foreground">
-                {paymentData?.paymentMethod}
+                {paymentData.paymentMethod.toLocaleUpperCase()}
               </p>
             </div>
             <div>
-              <p className="font-medium text-sm">Amount</p>
-              <p className="text-sm text-muted-foreground">
-                ${paymentData?.amount?.toFixed(2)}
+              <p className="font-medium text-sm mb-2 justify-end text-end w-full">
+                {" "}
+                Total Amount
+              </p>
+              <p className="text-sm text-muted-foreground justify-end text-end w-full">
+                ${paymentData.amount.toFixed(2)}
               </p>
             </div>
             {paymentData?.paymentMethod === "ach" && (

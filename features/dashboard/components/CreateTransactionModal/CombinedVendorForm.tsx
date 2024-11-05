@@ -65,9 +65,8 @@ export function CombinedVendorForm({
     resolver: zodResolver(createCombinedSchema(vendorDetails?.customFields)),
     defaultValues: {
       vendor: "",
-      invoices: [{ number: "" }],
+      invoices: [{ number: "", amount: 0 }],
       relatedBolAwb: "",
-      amount: 0.0,
       paymentDate: new Date(),
       additionalInfo: "",
     },
@@ -78,9 +77,15 @@ export function CombinedVendorForm({
     name: "invoices",
   });
 
+  // Calculate total amount from invoices
+  const totalAmount = form
+    .watch("invoices")
+    .reduce((sum, invoice) => sum + (invoice.amount || 0), 0);
+
   const onSubmit = (data: CombinedFormValues) => {
     const enrichedData = {
       ...data,
+      amount: totalAmount,
       sender: userWalletAddress,
       receiver: vendorDetails?.address || "",
     };
@@ -90,11 +95,11 @@ export function CombinedVendorForm({
   return (
     <Form {...form}>
       <div className="flex flex-col h-full">
-        <div className="flex-1 overflow-y-auto pb-20">
+        <div className="flex-1 overflow-y-auto mb-10">
           <form
             id="vendor-form"
             onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-4"
+            className="space-y-4 pb-10"
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
@@ -169,17 +174,17 @@ export function CombinedVendorForm({
               <Card className="bg-muted/50">
                 <CardContent className="p-4">
                   {!selectedVendor ? (
-                    <div className="text-sm text-muted-foreground justify-center py-6 items-center text-center">
+                    <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
                       Please select a vendor to view details
                     </div>
                   ) : isLoading ? (
                     <div className="space-y-2">
-                      <Skeleton className="h-4 w-[250px]" />
-                      <Skeleton className="h-4 w-[200px]" />
-                      <Skeleton className="h-4 w-[150px]" />
+                      <Skeleton className="h-2 w-[250px]" />
+                      <Skeleton className="h-2 w-[200px]" />
+                      <Skeleton className="h-2 w-[150px]" />
                     </div>
                   ) : vendorDetails ? (
-                    <div className="space-y-2 p-0 m-0">
+                    <div className="p-0 m-0">
                       <h4 className="font-semibold text-sm">
                         {vendorDetails.name}
                       </h4>
@@ -198,43 +203,73 @@ export function CombinedVendorForm({
             {selectedVendor && vendorDetails && (
               <div className="space-y-4">
                 <div className="space-y-4">
-                  <div className="flex items-end justify-between">
-                    <FormLabel>Invoices</FormLabel>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => append({ number: "" })}
-                      className="bg-black hover:bg-black/90 text-white"
-                    >
-                      Add Invoice
-                      <PlusIcon className="h-4 w-4" />
-                    </Button>
+                  <div className="flex">
+                    <div className="w-[60%]">
+                      <FormLabel>Invoices</FormLabel>
+                    </div>
+                    <div className="w-[40%]">
+                      <FormLabel className="text-sm text-muted-foreground ml-2">
+                        Amount (USDC)
+                      </FormLabel>
+                    </div>
+                    {fields.length > 1 && <div className="w-10" />}
                   </div>
 
                   {fields.map((field, index) => (
-                    <div key={field.id} className="flex gap-2">
-                      <FormField
-                        control={form.control}
-                        name={`invoices.${index}.number`}
-                        render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormControl>
-                              <Input
-                                placeholder="Enter invoice number"
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
+                    <div key={field.id} className="space-y-2">
+                      <div className="flex gap-2 w-full">
+                        <FormField
+                          control={form.control}
+                          name={`invoices.${index}.number`}
+                          render={({ field }) => (
+                            <FormItem className="w-[60%]">
+                              <FormControl>
+                                <Input
+                                  placeholder="Enter invoice number"
+                                  {...field}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`invoices.${index}.amount`}
+                          render={({ field }) => (
+                            <FormItem className="w-[40%]">
+                              <FormControl>
+                                <Input
+                                  type="number"
+                                  placeholder="0.00"
+                                  {...field}
+                                  onChange={(e) =>
+                                    field.onChange(parseFloat(e.target.value))
+                                  }
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        {fields.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => remove(index)}
+                            className="w-10 flex-shrink-0 hover:opacity-70 transition-opacity"
+                          >
+                            <TrashIcon className="h-5 w-5 text-black" />
+                          </button>
                         )}
-                      />
-                      {fields.length > 1 && (
+                      </div>
+                      {index === fields.length - 1 && (
                         <button
                           type="button"
-                          onClick={() => remove(index)}
-                          className="p-2 hover:opacity-70 transition-opacity"
+                          onClick={() => append({ number: "", amount: 0 })}
+                          className="w-full text-center pt-2 text-sm text-muted-foreground hover:text-black transition-colors flex items-center justify-center gap-2"
                         >
-                          <TrashIcon className="h-5 w-5 text-black mr-2" />
+                          <PlusIcon className="h-4 w-4" />
+                          Add Another Invoice
                         </button>
                       )}
                     </div>
@@ -272,7 +307,7 @@ export function CombinedVendorForm({
                       <FormControl>
                         <Textarea
                           placeholder="Enter any additional information"
-                          className="min-h-[100px]"
+                          className="min-h-[60px]"
                           {...field}
                         />
                       </FormControl>
@@ -281,28 +316,7 @@ export function CombinedVendorForm({
                   )}
                 />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <FormField
-                    control={form.control}
-                    name="amount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Payment Amount (in USDC)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            placeholder="Enter amount in USDC"
-                            {...field}
-                            onChange={(e) =>
-                              field.onChange(parseFloat(e.target.value))
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
+                <div className="grid grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
                     name="paymentDate"
@@ -324,6 +338,16 @@ export function CombinedVendorForm({
                       </FormItem>
                     )}
                   />
+
+                  <div className="space-y-2">
+                    <FormLabel>Total Amount (USDC)</FormLabel>
+                    <Input
+                      type="number"
+                      value={totalAmount.toFixed(2)}
+                      disabled
+                      className="text-muted-foreground bg-muted cursor-not-allowed"
+                    />
+                  </div>
                 </div>
               </div>
             )}
