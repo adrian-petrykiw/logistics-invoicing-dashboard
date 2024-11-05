@@ -29,8 +29,8 @@ export const useOrganization = (userId: string) => {
   });
 
   return {
-    organization: organizations?.[0], // Get first organization
-    organizations, // Keep the full list if needed
+    organization: organizations?.[0],
+    organizations,
     isLoading,
     createOrganization,
   };

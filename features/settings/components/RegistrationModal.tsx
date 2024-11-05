@@ -180,13 +180,12 @@ export function VendorRegistrationModal({
               </div>
 
               <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground mt-4">
-                <p>Next steps:</p>
+                <p>Notice:</p>
                 <ol className="list-decimal ml-4 mt-2 space-y-1">
                   <li>
-                    Complete a quick $1 USDC payment with your debit/credit card
+                    In order to register as a verified vendor you must complete
+                    a quick USDC payment with your debit/credit card
                   </li>
-                  <li>We'll create your secure multisig wallet</li>
-                  <li>Set up your vendor profile</li>
                 </ol>
               </div>
 
@@ -207,8 +206,7 @@ export function VendorRegistrationModal({
         {step === "payment" && iframeUrl && (
           <div className="space-y-4">
             <div className="text-sm text-muted-foreground">
-              Complete the $1 USDC payment with your card to create your vendor
-              account.
+              Complete a USDC payment with your card to register as a vendor
             </div>
             <div className="border rounded-lg overflow-hidden">
               <iframe
@@ -234,9 +232,7 @@ export function VendorRegistrationModal({
         {step === "processing" && (
           <div className="py-8 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-            <p className="mt-4 font-medium">
-              Setting up your vendor account...
-            </p>
+            <p className="mt-4 font-medium">Registering you as a vendor...</p>
             <p className="text-sm text-muted-foreground mt-2">
               This may take a few moments. Please don't close this window.
             </p>
