@@ -16,12 +16,8 @@ COPY . .
 # Build the Next.js app
 RUN npm run build
 
-# The port that Cloud Run will use
-ENV PORT=8080
-EXPOSE 8080
-
-# Set the environment variable for production
-ENV NODE_ENV=production
+# Expose port (adjust if your app uses a different port)
+EXPOSE 3000
 
 # Start the Next.js application
 CMD ["npm", "start"]
