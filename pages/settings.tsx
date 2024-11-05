@@ -1,4 +1,3 @@
-// pages/settings.tsx
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -22,10 +21,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "react-hot-toast";
-import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useOrganization } from "@/features/auth/hooks/useOrganization";
 import { useOrganizationMembers } from "@/features/auth/hooks/useOrganizationMembers";
 import { OrganizationMember, Role } from "@/schemas/organizationSchemas";
+import { useSquads } from "@/hooks/useSquads";
+import { Skeleton } from "@/components/ui/skeleton";
+import { VendorRegistrationModal } from "@/features/settings/components/RegistrationModal";
 
 interface EditMemberModalProps {
   member: OrganizationMember;
@@ -103,19 +104,20 @@ const EditMemberModal = ({
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { connected } = useWallet();
-  const { user, isAuthenticated } = useAuth();
+  const { connected, wallet, publicKey } = useWallet();
+  const [userInfo, setUserInfo] = useState<{ email: string } | null>(null);
   const [isCreateOrgModalOpen, setIsCreateOrgModalOpen] = useState(false);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<OrganizationMember | null>(
     null
   );
+  const { createMultisig } = useSquads();
 
   const {
     organization,
     isLoading: orgLoading,
     createOrganization,
-  } = useOrganization(user?.walletAddress || "");
+  } = useOrganization(publicKey?.toBase58() || "");
 
   const {
     members,
@@ -126,12 +128,20 @@ export default function SettingsPage() {
     canModifyMembers,
   } = useOrganizationMembers(organization?.id || null);
 
-  // Protect route
   useEffect(() => {
-    if (!connected || !isAuthenticated) {
-      router.push("/");
+    if (connected && wallet?.adapter.name === "Particle") {
+      const info = window.particle?.auth.getUserInfo();
+      setUserInfo({
+        email: info?.email || info?.google_email || "",
+      });
     }
-  }, [connected, isAuthenticated, router]);
+  }, [connected, wallet?.adapter.name]);
+
+  useEffect(() => {
+    if (!connected) {
+      router.push("/").catch(console.error);
+    }
+  }, [connected, router]);
 
   const handleCreateOrganization = async (
     e: React.FormEvent<HTMLFormElement>
@@ -144,8 +154,8 @@ export default function SettingsPage() {
         name: formData.get("companyName") as string,
         multisig_wallet: formData.get("multisigWallet") as string,
         owner_name: formData.get("ownerName") as string,
-        owner_email: user?.email || "",
-        owner_wallet_address: user?.walletAddress || "",
+        owner_email: userInfo?.email || "",
+        owner_wallet_address: publicKey?.toBase58() || "",
         business_details: {
           companyName: formData.get("companyName") as string,
           companyAddress:
@@ -215,8 +225,13 @@ export default function SettingsPage() {
     }
   };
 
-  if (!connected || !isAuthenticated) {
+  // Loading states
+  if (!connected) {
     return null;
+  }
+
+  if (!userInfo) {
+    return <div>Loading user data...</div>;
   }
 
   return (
@@ -232,16 +247,20 @@ export default function SettingsPage() {
           {/* Profile Settings */}
           <Card>
             <CardHeader>
-              <CardTitle>Profile Settings</CardTitle>
+              <CardTitle>My Profile</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input value={user?.email || ""} disabled />
+                <Input value={userInfo.email} disabled type="email" />
               </div>
               <div className="space-y-2">
                 <Label>Wallet Address</Label>
-                <Input value={user?.walletAddress || ""} disabled />
+                <Input
+                  value={publicKey?.toBase58() || ""}
+                  disabled
+                  type="text"
+                />
               </div>
             </CardContent>
           </Card>
@@ -251,57 +270,17 @@ export default function SettingsPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Organization</CardTitle>
               {!organization && (
-                <Dialog
-                  open={isCreateOrgModalOpen}
+                <VendorRegistrationModal
+                  isOpen={isCreateOrgModalOpen}
                   onOpenChange={setIsCreateOrgModalOpen}
-                >
-                  <DialogTrigger asChild>
-                    <Button>
-                      <FiPlus className="mr-2" /> Create Organization
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Create Organization</DialogTitle>
-                    </DialogHeader>
-                    <form
-                      onSubmit={handleCreateOrganization}
-                      className="space-y-4"
-                    >
-                      <div className="space-y-2">
-                        <Label>Your Full Name</Label>
-                        <Input name="ownerName" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Organization Name</Label>
-                        <Input name="name" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Company Name</Label>
-                        <Input name="companyName" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Company Address</Label>
-                        <Input name="companyAddress" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Company Phone</Label>
-                        <Input name="companyPhone" type="tel" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Company Email</Label>
-                        <Input name="companyEmail" type="email" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Multisig Wallet Address</Label>
-                        <Input name="multisigWallet" required />
-                      </div>
-                      <Button type="submit" className="w-full">
-                        Create
-                      </Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+                  userInfo={userInfo}
+                  onSubmitSuccess={() => {
+                    // Optionally refetch organization data
+                    // queryClient.invalidateQueries(['organization'])
+                  }}
+                  createMultisig={createMultisig}
+                  createOrganization={createOrganization}
+                />
               )}
             </CardHeader>
             <CardContent>
@@ -377,7 +356,14 @@ export default function SettingsPage() {
 
                     <div className="space-y-2">
                       {membersLoading ? (
-                        <div>Loading members...</div>
+                        <div className="space-y-2">
+                          {[1, 2, 3].map((i) => (
+                            <Skeleton
+                              key={i}
+                              className="h-24 w-full rounded-lg"
+                            />
+                          ))}
+                        </div>
                       ) : members?.length === 0 ? (
                         <div>No team members yet</div>
                       ) : (
@@ -427,16 +413,37 @@ export default function SettingsPage() {
                   </div>
                 </div>
               ) : orgLoading ? (
-                <div>Loading organization...</div>
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label>Organization Name</Label>
+                      <Skeleton className="h-6 w-[200px] mt-1" />
+                    </div>
+                    <div>
+                      <Label>Multisig Wallet</Label>
+                      <Skeleton className="h-6 w-[300px] mt-1" />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">Team Members</h3>
+                    </div>
+                    <div className="space-y-2">
+                      {[1, 2].map((i) => (
+                        <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div className="text-center py-8">
-                  <FiUsers className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <FiUsers className="mx-auto h-8 w-8 text-muted-foreground" />
                   <h3 className="mt-4 text-lg font-medium">
-                    No Organization Yet
+                    No Business Registered
                   </h3>
-                  <p className="mt-2 text-muted-foreground">
+                  <p className="mt-2 text-muted-foreground text-sm">
                     Create an organization to start managing your team and
-                    payments.
+                    making payments.
                   </p>
                 </div>
               )}
