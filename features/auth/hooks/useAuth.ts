@@ -21,6 +21,8 @@ export function useAuth() {
         userInfo: userInfo as ParticleUserInfo,
       };
     },
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
   });
 
   const logout = async () => {

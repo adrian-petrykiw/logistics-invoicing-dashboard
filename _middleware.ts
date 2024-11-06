@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { supabaseAdmin } from "./_lib/supabase";
+import { supabaseAdmin } from "./pages/api/_lib/supabase";
 
 export async function middleware(req: NextRequest) {
   const userEmail = req.headers.get("x-user-email");

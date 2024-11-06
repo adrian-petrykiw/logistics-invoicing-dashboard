@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { FiPlus } from "react-icons/fi";
+import { initOnRamp, InitOnRampParams } from "@coinbase/cbpay-js";
 import {
   Dialog,
   DialogContent,
@@ -14,25 +15,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "react-hot-toast";
 import { PublicKey } from "@solana/web3.js";
-import { UseMutationResult } from "@tanstack/react-query";
-import { usePayment } from "../hooks/usePayment";
+import { UseMutationResult, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import { AuthUser } from "@/types/auth"; // Ensure this import is correct
+
+type Experience = "embedded" | "popup" | "new_tab";
+type OnRampExperience = "buy" | "send";
 
 interface CreateMultisigResult {
   multisigPda: PublicKey;
-}
-
-interface CreateOrganizationData {
-  name: string;
-  multisig_wallet: string;
-  owner_name: string;
-  owner_email: string;
-  owner_wallet_address: string;
-  business_details: {
-    companyName: string;
-    companyAddress?: string;
-    companyPhone?: string;
-    companyEmail?: string;
-  };
 }
 
 interface VendorRegistrationModalProps {
@@ -43,17 +34,25 @@ interface VendorRegistrationModalProps {
   createMultisig: UseMutationResult<
     CreateMultisigResult,
     unknown,
-    {
-      creator: PublicKey;
-      email: string;
-      configAuthority: PublicKey;
-    },
+    { creator: PublicKey; email: string; configAuthority: PublicKey },
     unknown
   >;
   createOrganization: UseMutationResult<
     unknown,
     unknown,
-    CreateOrganizationData,
+    {
+      name: string;
+      multisig_wallet: string;
+      owner_name: string;
+      owner_email: string;
+      owner_wallet_address: string;
+      business_details: {
+        companyName: string;
+        companyAddress?: string;
+        companyPhone?: string;
+        companyEmail?: string;
+      };
+    },
     unknown
   >;
 }
@@ -71,157 +70,82 @@ export function VendorRegistrationModal({
   const [step, setStep] = useState<"details" | "processing">("details");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formDisabled, setFormDisabled] = useState(false);
-  const { checkPaymentStatus } = usePayment();
+  const onrampInstance = useRef<any>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const checkPaymentComplete = async () => {
-      console.log("Payment status check triggered", {
-        fullUrl: window.location.href,
-        queryParams: router.query,
-        hasPaymentParam: "payment" in router.query,
-        paymentValue: router.query.payment,
-      });
+  const handlePaymentSuccess = async () => {
+    try {
+      // Wait until user is authenticated
+      if (!user) {
+        console.log("Waiting for user to be authenticated...");
 
-      if (router.query.payment === "complete") {
-        const storedDataString = localStorage.getItem("vendorRegistrationData");
+        // Force refetch of the auth query
+        await queryClient.refetchQueries({ queryKey: ["auth"] });
 
-        if (storedDataString && publicKey) {
-          try {
-            const parsedData = JSON.parse(storedDataString);
+        // Wait up to 10 seconds for authentication
+        const timeout = 10000;
+        const pollInterval = 100;
 
-            // Check payment status with Coinbase
-            const isPaymentSuccess = await checkPaymentStatus(
-              parsedData.partnerUserId
-            );
-
-            if (isPaymentSuccess) {
-              console.log("Payment verified, proceeding with registration");
-              await handleRedirectPaymentComplete(parsedData);
+        await new Promise<void>((resolve, reject) => {
+          let waited = 0;
+          const intervalId = setInterval(() => {
+            if (waited >= timeout) {
+              clearInterval(intervalId);
+              reject(new Error("User not authenticated after waiting"));
+            } else if (queryClient.getQueryData<AuthUser>(["auth"])) {
+              clearInterval(intervalId);
+              resolve();
             } else {
-              console.log("Payment not verified yet");
-              toast.error("Payment verification failed. Please try again.");
-              setFormDisabled(false);
-              setIsSubmitting(false);
+              waited += pollInterval;
             }
-          } catch (error) {
-            console.error("Failed to process payment completion:", error);
-            toast.error("Failed to complete registration");
-            setFormDisabled(false);
-            setIsSubmitting(false);
-          }
-        }
+          }, pollInterval);
+        });
       }
-    };
 
-    checkPaymentComplete();
-  }, [router.query.payment, publicKey]);
+      // Fetch the latest user data
+      const currentUser = queryClient.getQueryData<AuthUser>(["auth"]);
 
-  useEffect(() => {
-    if (!isOpen) {
-      setIsSubmitting(false);
-      setFormDisabled(false);
-      setStep("details");
-    }
-  }, [isOpen]);
+      if (!currentUser || !publicKey) {
+        throw new Error("User not authenticated");
+      }
 
-  const handleInitialSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setFormDisabled(true);
-    const data = new FormData(e.currentTarget);
-    const amount = parseFloat(data.get("amount") as string);
-
-    console.log("Starting registration process...");
-
-    // Validate amount
-    if (amount < 1 || amount > 500) {
-      toast.error("Amount must be between $1 and $500");
-      setIsSubmitting(false);
-      setFormDisabled(false);
-      return;
-    }
-
-    try {
-      const partnerUserId = `${publicKey
-        ?.toBase58()
-        .slice(0, 15)}_${Date.now()}`.slice(0, 49);
-
-      const formData = {
-        ownerName: data.get("ownerName"),
-        companyName: data.get("companyName"),
-        companyAddress: data.get("companyAddress"),
-        companyPhone: data.get("companyPhone"),
-        companyEmail: data.get("companyEmail"),
-        amount: amount,
-        partnerUserId,
-      };
-
-      console.log("Storing form data:", formData);
-      localStorage.setItem("vendorRegistrationData", JSON.stringify(formData));
-
-      const redirectUrl = `${window.location.origin}/settings?payment=complete`;
-
-      const params = new URLSearchParams({
-        appId: "7ed0c9d9-1e93-47bb-9ae5-f57b6f0207b5",
-        addresses: JSON.stringify({
-          qWsuS2kxGbNxWKabVjJ6LvMgpCe6T5JghpqxDmn5RiJ: ["solana"],
-        }),
-        assets: JSON.stringify(["USDC"]),
-        presetFiatAmount: amount.toString(),
-        defaultExperience: "buy",
-        defaultPaymentMethod: "CARD",
-        fiatCurrency: "USD",
-        redirectUrl,
-        partnerUserId,
-        handlingRequestedUrls: "true",
-      });
-
-      const coinbaseUrl = `https://pay.coinbase.com/buy/select-asset?${params.toString()}`;
-      console.log("Redirecting to Coinbase:", coinbaseUrl);
-
-      const paymentWindow = window.open(coinbaseUrl, "_blank");
-      // if (!paymentWindow) {
-      //   window.location.href = coinbaseUrl;
-      // }
-    } catch (error) {
-      console.error("Payment initialization error:", error);
-      toast.error("Failed to initialize payment");
-      setFormDisabled(false);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleRedirectPaymentComplete = async (storedData: any) => {
-    try {
-      console.log("Starting organization creation process...");
+      // Proceed with organization creation
+      console.log(
+        "Payment successful, starting organization creation process..."
+      );
       setStep("processing");
 
+      // Retrieve registration data from localStorage
+      const storedData = localStorage.getItem("vendorRegistrationData");
+      if (!storedData) {
+        throw new Error("Registration data not found");
+      }
+      const formData = JSON.parse(storedData);
+
+      // Proceed with creating the multisig and organization
       const { multisigPda } = await createMultisig.mutateAsync({
         creator: publicKey!,
-        email: userInfo?.email || "",
+        email: currentUser.email,
         configAuthority: publicKey!,
       });
 
-      console.log("Multisig created:", multisigPda.toBase58());
-
       await createOrganization.mutateAsync({
-        name: storedData.companyName,
+        name: formData.companyName,
         multisig_wallet: multisigPda.toBase58(),
-        owner_name: storedData.ownerName,
-        owner_email: userInfo?.email || "",
+        owner_name: formData.ownerName,
+        owner_email: currentUser.email,
         owner_wallet_address: publicKey!.toBase58(),
         business_details: {
-          companyName: storedData.companyName,
-          companyAddress: storedData.companyAddress,
-          companyPhone: storedData.companyPhone,
-          companyEmail: storedData.companyEmail,
+          companyName: formData.companyName,
+          companyAddress: formData.companyAddress,
+          companyPhone: formData.companyPhone,
+          companyEmail: formData.companyEmail,
         },
       });
 
       console.log("Organization created successfully");
       localStorage.removeItem("vendorRegistrationData");
-      router.replace("/settings", undefined, { shallow: true });
       onOpenChange(false);
       onSubmitSuccess();
       toast.success("Organization registered successfully!");
@@ -230,6 +154,105 @@ export function VendorRegistrationModal({
       toast.error("Failed to complete registration");
       setStep("details");
       setFormDisabled(false);
+    }
+  };
+
+  const handleInitialSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setFormDisabled(true);
+
+    const data = new FormData(e.currentTarget);
+    const amount = parseFloat(data.get("amount") as string);
+    const ownerName = data.get("ownerName") as string;
+    const companyName = data.get("companyName") as string;
+    const companyAddress = data.get("companyAddress") as string;
+    const companyPhone = data.get("companyPhone") as string;
+    const companyEmail = data.get("companyEmail") as string;
+
+    if (!publicKey) {
+      toast.error("Please connect your wallet first");
+      setFormDisabled(false);
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (amount < 1 || amount > 500) {
+      toast.error("Amount must be between $1 and $500");
+      setIsSubmitting(false);
+      setFormDisabled(false);
+      return;
+    }
+
+    try {
+      // Generate a shorter partnerUserId
+      const basePublicKey = publicKey.toBase58();
+      const timestamp = Math.floor(Date.now() / 1000).toString(); // Timestamp in seconds
+
+      // Calculate maximum allowed length for the public key part
+      const maxPublicKeyLength = 50 - timestamp.length - 1; // Subtract length of timestamp and '_'
+      const shortPublicKey = basePublicKey.substring(0, maxPublicKeyLength);
+
+      const partnerUserId = `${shortPublicKey}_${timestamp}`;
+
+      // Save registration data to localStorage in case we need it later
+      const registrationData = {
+        ownerName,
+        companyName,
+        companyAddress,
+        companyPhone,
+        companyEmail,
+        amount,
+        partnerUserId,
+      };
+      localStorage.setItem(
+        "vendorRegistrationData",
+        JSON.stringify(registrationData)
+      );
+
+      // Configure Coinbase OnRamp with specified parameters
+      const options: InitOnRampParams = {
+        appId: process.env.NEXT_PUBLIC_COINBASE_APP_ID!,
+        widgetParameters: {
+          destinationWallets: [
+            {
+              address: "qWsuS2kxGbNxWKabVjJ6LvMgpCe6T5JghpqxDmn5RiJ",
+              assets: ["USDC"], // Restrict to USDC
+              supportedNetworks: ["solana"], // Restrict to Solana network
+            },
+          ],
+          presetCryptoAmount: amount, // Specify amount in USDC
+          defaultExperience: "buy" as OnRampExperience,
+          partnerUserId: partnerUserId, // Partner user ID
+        },
+        onSuccess: handlePaymentSuccess,
+        onExit: () => {
+          setFormDisabled(false);
+          toast.error("Payment process was exited.");
+        },
+        experienceLoggedIn: "popup" as Experience,
+        experienceLoggedOut: "popup" as Experience,
+        closeOnExit: true,
+        closeOnSuccess: true,
+      };
+
+      // Initialize the OnRamp instance
+      initOnRamp(options, (error, instance) => {
+        if (instance) {
+          onrampInstance.current = instance;
+          onrampInstance.current.open(); // Open the OnRamp flow
+        } else {
+          console.error("Failed to initialize Coinbase OnRamp:", error);
+          toast.error("Failed to initialize Coinbase OnRamp");
+          setFormDisabled(false);
+          setIsSubmitting(false);
+        }
+      });
+    } catch (error) {
+      console.error("Payment initialization error:", error);
+      toast.error("Failed to initialize payment");
+      setFormDisabled(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -247,11 +270,7 @@ export function VendorRegistrationModal({
           <FiPlus /> Register Vendor
         </Button>
       </DialogTrigger>
-      <DialogContent
-        className="max-w-2xl max-h-[90vh] overflow-y-auto"
-        aria-labelledby="dialog-title"
-        aria-describedby="dialog-description"
-      >
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Register Vendor</DialogTitle>
         </DialogHeader>
@@ -270,7 +289,6 @@ export function VendorRegistrationModal({
               <Label>Company Address*</Label>
               <Input name="companyAddress" required disabled={formDisabled} />
             </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Company Phone</Label>
@@ -285,7 +303,6 @@ export function VendorRegistrationModal({
                 />
               </div>
             </div>
-
             <div className="space-y-2">
               <Label>Amount (USDC)*</Label>
               <Input
@@ -299,7 +316,6 @@ export function VendorRegistrationModal({
                 disabled={formDisabled}
               />
             </div>
-
             <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground mt-4">
               <p>
                 <span className="font-bold">Notice: </span>
@@ -314,19 +330,7 @@ export function VendorRegistrationModal({
               className="w-full"
               disabled={isSubmitting || formDisabled}
             >
-              {isSubmitting ? (
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  <span>Processing...</span>
-                </div>
-              ) : formDisabled ? (
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  <span>Waiting for payment...</span>
-                </div>
-              ) : (
-                "Register"
-              )}
+              {isSubmitting ? "Processing..." : "Register"}
             </Button>
           </form>
         )}
@@ -334,10 +338,7 @@ export function VendorRegistrationModal({
         {step === "processing" && (
           <div className="py-8 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
-            <p className="mt-4 font-medium">Registering you as a vendor...</p>
-            <p className="text-sm text-muted-foreground mt-2">
-              This may take a few moments. Please don't close this window.
-            </p>
+            <p>Registering you as a vendor...</p>
           </div>
         )}
       </DialogContent>

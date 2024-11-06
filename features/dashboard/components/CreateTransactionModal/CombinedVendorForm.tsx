@@ -204,11 +204,11 @@ export function CombinedVendorForm({
               <div className="space-y-4">
                 <div className="space-y-4">
                   <div className="flex">
-                    <div className="w-[60%]">
+                    <div className="w-[50%]">
                       <FormLabel>Invoices</FormLabel>
                     </div>
-                    <div className="w-[40%]">
-                      <FormLabel className="text-sm text-muted-foreground ml-2">
+                    <div className="w-[50%]">
+                      <FormLabel className="text-sm text-muted-foreground ml-4">
                         Amount (USDC)
                       </FormLabel>
                     </div>
@@ -217,12 +217,12 @@ export function CombinedVendorForm({
 
                   {fields.map((field, index) => (
                     <div key={field.id} className="space-y-2">
-                      <div className="flex gap-2 w-full">
+                      <div className="flex gap-6 w-full">
                         <FormField
                           control={form.control}
                           name={`invoices.${index}.number`}
                           render={({ field }) => (
-                            <FormItem className="w-[60%]">
+                            <FormItem className="w-[50%]">
                               <FormControl>
                                 <Input
                                   placeholder="Enter invoice number"
@@ -237,7 +237,7 @@ export function CombinedVendorForm({
                           control={form.control}
                           name={`invoices.${index}.amount`}
                           render={({ field }) => (
-                            <FormItem className="w-[40%]">
+                            <FormItem className="w-[50%]">
                               <FormControl>
                                 <Input
                                   type="number"

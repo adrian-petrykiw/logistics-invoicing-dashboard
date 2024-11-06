@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,9 @@ import { OrganizationMember, Role } from "@/schemas/organizationSchemas";
 import { useSquads } from "@/hooks/useSquads";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VendorRegistrationModal } from "@/features/settings/components/RegistrationModal";
+
+// Payment status type
+type PaymentStatus = "none" | "pending" | "processing" | "failed";
 
 interface EditMemberModalProps {
   member: OrganizationMember;
@@ -111,6 +115,7 @@ export default function SettingsPage() {
   const [editingMember, setEditingMember] = useState<OrganizationMember | null>(
     null
   );
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("none");
   const { createMultisig } = useSquads();
 
   const {
@@ -137,111 +142,79 @@ export default function SettingsPage() {
     }
   }, [connected, wallet?.adapter.name]);
 
-  // useEffect(() => {
-  //   // Check if we're returning from Coinbase payment
-  //   if (router.query.payment === "complete") {
-  //     const storedData = localStorage.getItem("vendorRegistrationData");
-  //     if (storedData) {
-  //       const formData = JSON.parse(storedData);
-
-  //       // Clear stored data
-  //       localStorage.removeItem("vendorRegistrationData");
-
-  //       // Create multisig and organization
-  //       handlePaymentComplete(formData);
-  //     }
-  //   }
-  // }, [router.query]);
-
-  // In your settings page
+  // Handle Coinbase payment status
   useEffect(() => {
-    const handlePaymentReturn = async () => {
-      if (router.query.payment === "complete") {
-        const storedData = localStorage.getItem("vendorRegistrationData");
-        if (storedData) {
-          try {
-            const formData = JSON.parse(storedData);
-            // Your handlePaymentComplete logic here
-            console.log(
-              "Payment completed, processing registration with data:",
-              formData
-            );
+    const checkPaymentStatus = async () => {
+      const storedData = localStorage.getItem("vendorRegistrationData");
 
-            // Clear stored data after successful processing
-            localStorage.removeItem("vendorRegistrationData");
-          } catch (error) {
-            console.error("Error processing payment return:", error);
-            toast.error("Failed to complete registration");
-          }
+      if (storedData && router.query.payment === "complete") {
+        try {
+          setPaymentStatus("processing");
+          const formData = JSON.parse(storedData);
+
+          // Implement webhook check here
+          // const paymentConfirmed = await checkPaymentWebhook(formData.partnerUserId);
+
+          // For now, proceed with organization creation
+          if (!publicKey) return;
+
+          // Create multisig wallet
+          const { multisigPda } = await createMultisig.mutateAsync({
+            creator: publicKey,
+            email: userInfo?.email || "",
+            configAuthority: publicKey,
+          });
+
+          // Create organization
+          await createOrganization.mutateAsync({
+            name: formData.companyName,
+            multisig_wallet: multisigPda.toBase58(),
+            owner_name: formData.ownerName,
+            owner_email: userInfo?.email || "",
+            owner_wallet_address: publicKey.toBase58(),
+            business_details: {
+              companyName: formData.companyName,
+              companyAddress: formData.companyAddress,
+              companyPhone: formData.companyPhone,
+              companyEmail: formData.companyEmail,
+            },
+          });
+
+          localStorage.removeItem("vendorRegistrationData");
+          router.replace("/settings", undefined, { shallow: true });
+          setPaymentStatus("none");
+          toast.success("Organization registered successfully!");
+        } catch (error) {
+          console.error("Payment/Registration failed:", error);
+          setPaymentStatus("failed");
+          localStorage.removeItem("vendorRegistrationData");
+          toast.error("Failed to complete registration");
         }
       }
     };
 
-    handlePaymentReturn();
-  }, [router.query]);
+    checkPaymentStatus();
+  }, [
+    router.query.payment,
+    publicKey,
+    createMultisig,
+    createOrganization,
+    userInfo,
+  ]);
 
-  const handlePaymentComplete = async (formData: any) => {
-    if (!publicKey) return;
-
-    try {
-      // Create multisig wallet
-      const { multisigPda } = await createMultisig.mutateAsync({
-        creator: publicKey,
-        email: userInfo?.email || "",
-        configAuthority: publicKey,
-      });
-
-      // Create organization with the new multisig
-      await createOrganization.mutateAsync({
-        name: formData.name,
-        multisig_wallet: multisigPda.toBase58(),
-        owner_name: formData.ownerName,
-        owner_email: userInfo?.email || "",
-        owner_wallet_address: publicKey.toBase58(),
-        business_details: {
-          companyName: formData.companyName,
-          companyAddress: formData.companyAddress,
-          companyPhone: formData.companyPhone,
-          companyEmail: formData.companyEmail,
-        },
-      });
-
-      toast.success("Organization registered successfully!");
-    } catch (error) {
-      toast.error("Failed to complete registration");
-      console.error("Registration error:", error);
+  // Check for pending registration on mount
+  useEffect(() => {
+    const storedData = localStorage.getItem("vendorRegistrationData");
+    if (storedData) {
+      setPaymentStatus("pending");
     }
+  }, []);
+
+  const handleResetRegistration = () => {
+    localStorage.removeItem("vendorRegistrationData");
+    setPaymentStatus("none");
+    toast.success("Registration reset successfully");
   };
-
-  // const handleCreateOrganization = async (
-  //   e: React.FormEvent<HTMLFormElement>
-  // ) => {
-  //   e.preventDefault();
-  //   const formData = new FormData(e.currentTarget);
-
-  //   try {
-  //     await createOrganization.mutateAsync({
-  //       name: formData.get("companyName") as string,
-  //       multisig_wallet: formData.get("multisigWallet") as string,
-  //       owner_name: formData.get("ownerName") as string,
-  //       owner_email: userInfo?.email || "",
-  //       owner_wallet_address: publicKey?.toBase58() || "",
-  //       business_details: {
-  //         companyName: formData.get("companyName") as string,
-  //         companyAddress:
-  //           (formData.get("companyAddress") as string) || undefined,
-  //         companyPhone: (formData.get("companyPhone") as string) || undefined,
-  //         companyEmail: (formData.get("companyEmail") as string) || undefined,
-  //       },
-  //     });
-
-  //     setIsCreateOrgModalOpen(false);
-  //     toast.success("Organization created successfully!");
-  //   } catch (error) {
-  //     toast.error("Failed to create organization");
-  //     console.error("Create organization error:", error);
-  //   }
-  // };
 
   const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -304,6 +277,48 @@ export default function SettingsPage() {
     return <div>Loading user data...</div>;
   }
 
+  const renderPaymentStatus = () => {
+    switch (paymentStatus) {
+      case "pending":
+        return (
+          <Alert className="mb-4">
+            <AlertDescription>
+              Awaiting payment confirmation...
+              <Button
+                variant="link"
+                onClick={handleResetRegistration}
+                className="ml-2 text-sm"
+              >
+                Reset Registration
+              </Button>
+            </AlertDescription>
+          </Alert>
+        );
+      case "processing":
+        return (
+          <Alert className="mb-4">
+            <AlertDescription>Processing your registration...</AlertDescription>
+          </Alert>
+        );
+      case "failed":
+        return (
+          <Alert className="mb-4" variant="destructive">
+            <AlertDescription>
+              Payment verification failed. Please try again.
+              <Button
+                variant="link"
+                onClick={handleResetRegistration}
+                className="ml-2 text-sm"
+              >
+                Start New Registration
+              </Button>
+            </AlertDescription>
+          </Alert>
+        );
+      default:
+        return null;
+    }
+  };
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border">
@@ -339,14 +354,13 @@ export default function SettingsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Organization</CardTitle>
-              {!organization && (
+              {!organization && paymentStatus === "none" && (
                 <VendorRegistrationModal
                   isOpen={isCreateOrgModalOpen}
                   onOpenChange={setIsCreateOrgModalOpen}
                   userInfo={userInfo}
                   onSubmitSuccess={() => {
-                    // Optionally refetch organization data
-                    // queryClient.invalidateQueries(['organization'])
+                    setPaymentStatus("none");
                   }}
                   createMultisig={createMultisig}
                   createOrganization={createOrganization}
@@ -354,6 +368,8 @@ export default function SettingsPage() {
               )}
             </CardHeader>
             <CardContent>
+              {renderPaymentStatus()}
+
               {organization ? (
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
@@ -504,6 +520,16 @@ export default function SettingsPage() {
                       ))}
                     </div>
                   </div>
+                </div>
+              ) : paymentStatus === "pending" ? (
+                <div className="text-center py-8">
+                  <FiUsers className="mx-auto h-8 w-8 text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-medium">
+                    Registration In Progress
+                  </h3>
+                  <p className="mt-2 text-muted-foreground text-sm">
+                    Waiting for payment confirmation from Coinbase.
+                  </p>
                 </div>
               ) : (
                 <div className="text-center py-8">
