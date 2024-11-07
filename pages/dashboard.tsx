@@ -23,7 +23,7 @@ export default function DashboardPage() {
   //   if (!connected || isLoading) {
   if (!connected) {
     return (
-      <div className="min-h-screen bg-secondary flex items-center justify-center">
+      <div className="min-h-screen bg-primary flex items-center justify-center">
         <div className="text-tertiary">Loading...</div>
       </div>
     );
@@ -31,8 +31,8 @@ export default function DashboardPage() {
 
   return (
     <main className="container mx-auto py-8 ">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold text-tertiary">Account Info</h1>
+      <div className="flex justify-between items-end mb-4">
+        <h1 className="text-lg font-bold text-tertiary mb-0">Account Info</h1>
         <Button
           onClick={() => setIsCreateModalOpen(true)}
           className="bg-tertiary text-primary hover:bg-quaternary"

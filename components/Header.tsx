@@ -16,9 +16,9 @@ export function Header() {
       <div className="container flex justify-between items-center">
         <Link
           href="/dashboard"
-          className="text-xl font-bold text-tertiary font-montserrat"
+          className="text-xl font-bold text-tertiary font-inter"
         >
-          CARGOBILL
+          CargoBill
         </Link>
 
         <nav className="flex items-center gap-8">

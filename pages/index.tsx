@@ -32,8 +32,8 @@ export default function LandingPage() {
       {/* Navigation */}
       <nav className="border-b border-secondary px-6 py-4">
         <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-xl font-bold text-tertiary font-montserrat">
-            CARGOBILL
+          <h1 className="text-xl font-bold text-tertiary font-inter">
+            CargoBill
           </h1>
           <div className="flex items-center gap-4">
             <ParticleAuthButton />

@@ -83,13 +83,13 @@ const EditMemberModal = ({
             <Label>Email</Label>
             <Input value={member.email || ""} disabled />
           </div>
-          <div className="space-y-2">
+          {/* <div className="space-y-2">
             <Label>Wallet Address</Label>
             <Input
               name="walletAddress"
               defaultValue={member.wallet_address || ""}
             />
-          </div>
+          </div> */}
           <div className="space-y-2">
             <Label>Role</Label>
             <Select name="role" defaultValue={member.role}>
@@ -98,7 +98,7 @@ const EditMemberModal = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="user">User</SelectItem>
+                <SelectItem value="user">Member</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -379,7 +379,7 @@ export default function SettingsPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="admin">Admin</SelectItem>
-                                  <SelectItem value="user">User</SelectItem>
+                                  <SelectItem value="user">Member</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -429,7 +429,7 @@ export default function SettingsPage() {
                               {member.wallet_address || "N/A"}
                             </p>
                           </div>
-                          {canModifyMembers && (
+                          {canModifyMembers && member.role !== "owner" && (
                             <div className="flex gap-2">
                               <Button
                                 variant="ghost"

@@ -8,7 +8,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isLoading, isAuthenticated, logout } = useAuth();
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    <div className="bg-primary flex items-center justify-center">
+      Loading...
+    </div>;
   }
 
   // Create a properly typed auth state object

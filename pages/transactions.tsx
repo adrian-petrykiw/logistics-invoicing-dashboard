@@ -43,8 +43,8 @@ export default function TransactionsPage() {
     <main className="container mx-auto py-8">
       {/* Search and Filters */}
 
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-xl font-bold text-tertiary">Transaction History</h1>
+      <div className="flex justify-between items-end mb-4">
+        <h1 className="text-lg font-bold text-tertiary">Transaction History</h1>
         <div className="mb-2">
           <div className="relative">
             <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-quaternary" />
