@@ -1,4 +1,3 @@
-// services/squads.ts
 import * as multisig from "@sqds/multisig";
 import {
   Connection,
@@ -10,11 +9,243 @@ import {
 import { ParsedMultisigAccount } from "@/types/types";
 const { Permission, Permissions } = multisig.types;
 
+export interface VaultTransactionInfo {
+  publicKey: PublicKey;
+  account: multisig.accounts.VaultTransaction;
+  proposalAccount?: multisig.accounts.Proposal;
+}
+
+export interface ConfigTransactionInfo {
+  publicKey: PublicKey;
+  account: multisig.accounts.ConfigTransaction;
+  proposalAccount?: multisig.accounts.Proposal;
+}
+
+export interface MultisigInfo {
+  publicKey: PublicKey;
+  account: multisig.accounts.Multisig;
+  vaults?: PublicKey[];
+}
+
 export class SquadsService {
   private connection: Connection;
 
   constructor(endpoint: string) {
     this.connection = new Connection(endpoint);
+  }
+
+  // Fetch a specific multisig account and its associated vaults
+  async fetchMultisigInfo(
+    multisigPda: PublicKey
+  ): Promise<MultisigInfo | null> {
+    try {
+      const multisigAccount =
+        await multisig.accounts.Multisig.fromAccountAddress(
+          this.connection,
+          multisigPda
+        );
+
+      // Get all vault PDAs (we'll fetch first 5 vaults by default)
+      const vaults = await Promise.all(
+        Array.from({ length: 5 }).map((_, i) => {
+          const [vaultPda] = multisig.getVaultPda({
+            multisigPda,
+            index: i,
+          });
+          return vaultPda;
+        })
+      );
+
+      return {
+        publicKey: multisigPda,
+        account: multisigAccount,
+        vaults,
+      };
+    } catch (error) {
+      console.error("Error fetching multisig info:", error);
+      return null;
+    }
+  }
+
+  // Fetch a specific vault account
+  async fetchVaultAccount(
+    multisigPda: PublicKey,
+    vaultIndex: number
+  ): Promise<PublicKey> {
+    const [vaultPda] = multisig.getVaultPda({
+      multisigPda,
+      index: vaultIndex,
+    });
+    return vaultPda;
+  }
+
+  // Fetch a specific vault transaction and its proposal
+  async fetchVaultTransaction(
+    multisigPda: PublicKey,
+    transactionIndex: bigint
+  ): Promise<VaultTransactionInfo | null> {
+    try {
+      const [transactionPda] = multisig.getTransactionPda({
+        multisigPda,
+        index: transactionIndex,
+      });
+
+      const transactionAccount =
+        await multisig.accounts.VaultTransaction.fromAccountAddress(
+          this.connection,
+          transactionPda
+        );
+
+      // Get the proposal account if it exists
+      const [proposalPda] = multisig.getProposalPda({
+        multisigPda,
+        transactionIndex,
+      });
+
+      let proposalAccount;
+      try {
+        proposalAccount = await multisig.accounts.Proposal.fromAccountAddress(
+          this.connection,
+          proposalPda
+        );
+      } catch (e) {
+        // Proposal might not exist yet
+        console.log("No proposal account found for transaction");
+      }
+
+      return {
+        publicKey: transactionPda,
+        account: transactionAccount,
+        proposalAccount,
+      };
+    } catch (error) {
+      console.error("Error fetching vault transaction:", error);
+      return null;
+    }
+  }
+
+  // Fetch a specific config transaction and its proposal
+  async fetchConfigTransaction(
+    multisigPda: PublicKey,
+    transactionIndex: bigint
+  ): Promise<ConfigTransactionInfo | null> {
+    try {
+      const [transactionPda] = multisig.getTransactionPda({
+        multisigPda,
+        index: transactionIndex,
+      });
+
+      const transactionAccount =
+        await multisig.accounts.ConfigTransaction.fromAccountAddress(
+          this.connection,
+          transactionPda
+        );
+
+      // Get the proposal account if it exists
+      const [proposalPda] = multisig.getProposalPda({
+        multisigPda,
+        transactionIndex,
+      });
+
+      let proposalAccount;
+      try {
+        proposalAccount = await multisig.accounts.Proposal.fromAccountAddress(
+          this.connection,
+          proposalPda
+        );
+      } catch (e) {
+        // Proposal might not exist yet
+        console.log("No proposal account found for transaction");
+      }
+
+      return {
+        publicKey: transactionPda,
+        account: transactionAccount,
+        proposalAccount,
+      };
+    } catch (error) {
+      console.error("Error fetching config transaction:", error);
+      return null;
+    }
+  }
+
+  // Fetch all transactions (both vault and config) for a multisig
+  async fetchAllTransactions(
+    multisigPda: PublicKey
+  ): Promise<(VaultTransactionInfo | ConfigTransactionInfo)[]> {
+    try {
+      // First get the multisig account to know how many transactions exist
+      const multisigAccount =
+        await multisig.accounts.Multisig.fromAccountAddress(
+          this.connection,
+          multisigPda
+        );
+
+      const currentTransactionIndex = Number(multisigAccount.transactionIndex);
+
+      // Fetch all transactions
+      const transactions = await Promise.all(
+        Array.from({ length: currentTransactionIndex }).map(async (_, i) => {
+          const index = BigInt(i + 1);
+          const [transactionPda] = multisig.getTransactionPda({
+            multisigPda,
+            index,
+          });
+
+          try {
+            // Try to fetch as vault transaction first
+            const vaultTx = await this.fetchVaultTransaction(
+              multisigPda,
+              index
+            );
+            if (vaultTx) return vaultTx;
+
+            // If not a vault transaction, try as config transaction
+            const configTx = await this.fetchConfigTransaction(
+              multisigPda,
+              index
+            );
+            if (configTx) return configTx;
+
+            return null;
+          } catch (e) {
+            console.error(`Error fetching transaction ${index}:`, e);
+            return null;
+          }
+        })
+      );
+
+      return transactions.filter(
+        (tx): tx is VaultTransactionInfo | ConfigTransactionInfo => tx !== null
+      );
+    } catch (error) {
+      console.error("Error fetching all transactions:", error);
+      return [];
+    }
+  }
+
+  // Fetch a specific proposal
+  async fetchProposal(
+    multisigPda: PublicKey,
+    transactionIndex: bigint
+  ): Promise<multisig.accounts.Proposal | null> {
+    try {
+      const [proposalPda] = multisig.getProposalPda({
+        multisigPda,
+        transactionIndex,
+      });
+
+      const proposalAccount =
+        await multisig.accounts.Proposal.fromAccountAddress(
+          this.connection,
+          proposalPda
+        );
+
+      return proposalAccount;
+    } catch (error) {
+      console.error("Error fetching proposal:", error);
+      return null;
+    }
   }
 
   async createControlledMultisig({
@@ -26,16 +257,11 @@ export class SquadsService {
     email: string;
     configAuthority: PublicKey;
   }) {
-    // Create key from email
-    // const createKey = await this.generateCreateKeyFromEmail(email);
     const createKey = Keypair.generate().publicKey;
-
-    // Derive the multisig PDA
     const [multisigPda] = multisig.getMultisigPda({
       createKey: createKey,
     });
 
-    // Get program config for treasury
     const programConfigPda = multisig.getProgramConfigPda({})[0];
     const programConfig =
       await multisig.accounts.ProgramConfig.fromAccountAddress(
@@ -43,17 +269,16 @@ export class SquadsService {
         programConfigPda
       );
 
-    // Create the multisig
     const createIx = await multisig.instructions.multisigCreateV2({
       createKey,
       creator,
       multisigPda,
-      configAuthority, // The executive's public key
-      threshold: 1, // Single signer required initially
+      configAuthority,
+      threshold: 1,
       members: [
         {
           key: creator,
-          permissions: Permissions.all(), // Executive gets all permissions
+          permissions: Permissions.all(),
         },
       ],
       timeLock: 0,
@@ -78,7 +303,6 @@ export class SquadsService {
     configAuthority: Keypair;
   }) {
     try {
-      // First get the current transaction index
       const multisigAccount =
         await multisig.accounts.Multisig.fromAccountAddress(
           this.connection,
@@ -88,7 +312,6 @@ export class SquadsService {
       const currentTransactionIndex = Number(multisigAccount.transactionIndex);
       const newTransactionIndex = BigInt(currentTransactionIndex + 1);
 
-      // Create the config transaction
       const addMemberInstruction =
         await multisig.instructions.configTransactionCreate({
           multisigPda,
@@ -99,16 +322,13 @@ export class SquadsService {
               __kind: "AddMember",
               newMember: {
                 key: memberPublicKey,
-                permissions: Permissions.all(), // Employees get all permissions except config
+                permissions: Permissions.all(),
               },
             },
           ],
         });
 
-      // Since this is a controlled multisig, we can execute it directly
       const transaction = new Transaction().add(addMemberInstruction);
-
-      // Sign and send the transaction
       const signature = await this.connection.sendTransaction(transaction, [
         configAuthority,
       ]);
@@ -123,7 +343,6 @@ export class SquadsService {
   async fetchMultisigsByOwner(
     ownerAddress: PublicKey
   ): Promise<ParsedMultisigAccount[]> {
-    // Get all accounts owned by the Squads program
     const accounts = await this.connection.getProgramAccounts(
       new PublicKey(process.env.SQUADS_PROGRAM_ID!),
       {
@@ -138,7 +357,6 @@ export class SquadsService {
       }
     );
 
-    // Parse the accounts into Multisig objects with their public keys
     const multisigs = await Promise.all(
       accounts.map(async ({ pubkey, account }) => {
         try {
@@ -160,7 +378,6 @@ export class SquadsService {
 
   async fetchMultisigTransactions(multisigAddress: PublicKey) {
     try {
-      // Get the last 100 signatures for the multisig address
       const signatures = await this.connection.getSignaturesForAddress(
         multisigAddress,
         {
@@ -168,7 +385,6 @@ export class SquadsService {
         }
       );
 
-      // Fetch the transaction details for each signature
       const transactions = await Promise.all(
         signatures.map(async (sig) => {
           try {
@@ -196,14 +412,6 @@ export class SquadsService {
     }
   }
 }
-
-//   private async generateCreateKeyFromEmail(email: string): Promise<Keypair> {
-//     const encoder = new TextEncoder();
-//     const data = encoder.encode(email);
-//     const hash = await crypto.subtle.digest("SHA-256", data);
-//     const seed = new Uint8Array(hash);
-//     return Keypair.fromSeed(seed);
-//   }
 
 export const squadsService = new SquadsService(
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL!
