@@ -13,13 +13,16 @@ export function Header() {
 
   return (
     <header className="bg-primary border-b border-secondary py-4">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link href="/dashboard" className="text-2xl font-bold text-tertiary">
-          INVOICE
+      <div className="container flex justify-between items-center">
+        <Link
+          href="/dashboard"
+          className="text-xl font-bold text-tertiary font-montserrat"
+        >
+          CARGOBILL
         </Link>
 
         <nav className="flex items-center gap-8">
-          {navigation.map((item) => (
+          {navigation.map((item: any) => (
             <Link
               key={item.name}
               href={item.href}

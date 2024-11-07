@@ -24,16 +24,18 @@ import {
 import { toast } from "react-hot-toast";
 import { useOrganization } from "@/features/auth/hooks/useOrganization";
 import { useOrganizationMembers } from "@/features/auth/hooks/useOrganizationMembers";
-import { OrganizationMember, Role } from "@/schemas/organizationSchemas";
+import {
+  OrganizationMember,
+  OrganizationMemberResponse,
+  Role,
+  UpdateMemberInput,
+} from "@/schemas/organizationSchemas";
 import { useSquads } from "@/hooks/useSquads";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VendorRegistrationModal } from "@/features/settings/components/RegistrationModal";
 
-// Payment status type
-type PaymentStatus = "none" | "pending" | "processing" | "failed";
-
 interface EditMemberModalProps {
-  member: OrganizationMember;
+  member: OrganizationMemberResponse;
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (updates: {
@@ -75,15 +77,18 @@ const EditMemberModal = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label>Name</Label>
-            <Input name="name" defaultValue={member.name} required />
+            <Input name="name" defaultValue={member.name || ""} required />
           </div>
           <div className="space-y-2">
             <Label>Email</Label>
-            <Input value={member.email} disabled />
+            <Input value={member.email || ""} disabled />
           </div>
           <div className="space-y-2">
             <Label>Wallet Address</Label>
-            <Input name="walletAddress" defaultValue={member.wallet_address} />
+            <Input
+              name="walletAddress"
+              defaultValue={member.wallet_address || ""}
+            />
           </div>
           <div className="space-y-2">
             <Label>Role</Label>
@@ -112,10 +117,9 @@ export default function SettingsPage() {
   const [userInfo, setUserInfo] = useState<{ email: string } | null>(null);
   const [isCreateOrgModalOpen, setIsCreateOrgModalOpen] = useState(false);
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
-  const [editingMember, setEditingMember] = useState<OrganizationMember | null>(
-    null
-  );
-  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("none");
+  const [editingMember, setEditingMember] =
+    useState<OrganizationMemberResponse | null>(null);
+
   const { createMultisig } = useSquads();
 
   const {
@@ -143,78 +147,72 @@ export default function SettingsPage() {
   }, [connected, wallet?.adapter.name]);
 
   // Handle Coinbase payment status
-  useEffect(() => {
-    const checkPaymentStatus = async () => {
-      const storedData = localStorage.getItem("vendorRegistrationData");
+  // useEffect(() => {
+  //   const checkPaymentStatus = async () => {
+  //     const storedData = localStorage.getItem("vendorRegistrationData");
 
-      if (storedData && router.query.payment === "complete") {
-        try {
-          setPaymentStatus("processing");
-          const formData = JSON.parse(storedData);
+  //     if (storedData && router.query.payment === "complete") {
+  //       try {
+  //         setPaymentStatus("processing");
+  //         const formData = JSON.parse(storedData);
 
-          // Implement webhook check here
-          // const paymentConfirmed = await checkPaymentWebhook(formData.partnerUserId);
+  //         // Implement webhook check here
+  //         // const paymentConfirmed = await checkPaymentWebhook(formData.partnerUserId);
 
-          // For now, proceed with organization creation
-          if (!publicKey) return;
+  //         // For now, proceed with organization creation
+  //         if (!publicKey) return;
 
-          // Create multisig wallet
-          const { multisigPda } = await createMultisig.mutateAsync({
-            creator: publicKey,
-            email: userInfo?.email || "",
-            configAuthority: publicKey,
-          });
+  //         // Create multisig wallet
+  //         const { multisigPda } = await createMultisig.mutateAsync({
+  //           creator: publicKey,
+  //           email: userInfo?.email || "",
+  //           configAuthority: publicKey,
+  //         });
 
-          // Create organization
-          await createOrganization.mutateAsync({
-            name: formData.companyName,
-            multisig_wallet: multisigPda.toBase58(),
-            owner_name: formData.ownerName,
-            owner_email: userInfo?.email || "",
-            owner_wallet_address: publicKey.toBase58(),
-            business_details: {
-              companyName: formData.companyName,
-              companyAddress: formData.companyAddress,
-              companyPhone: formData.companyPhone,
-              companyEmail: formData.companyEmail,
-            },
-          });
+  //         // Create organization
+  //         await createOrganization.mutateAsync({
+  //           name: formData.companyName,
+  //           multisig_wallet: multisigPda.toBase58(),
+  //           owner_name: formData.ownerName,
+  //           owner_email: userInfo?.email || "",
+  //           owner_wallet_address: publicKey.toBase58(),
+  //           business_details: {
+  //             companyName: formData.companyName,
+  //             companyAddress: formData.companyAddress,
+  //             companyPhone: formData.companyPhone,
+  //             companyEmail: formData.companyEmail,
+  //           },
+  //         });
 
-          localStorage.removeItem("vendorRegistrationData");
-          router.replace("/settings", undefined, { shallow: true });
-          setPaymentStatus("none");
-          toast.success("Organization registered successfully!");
-        } catch (error) {
-          console.error("Payment/Registration failed:", error);
-          setPaymentStatus("failed");
-          localStorage.removeItem("vendorRegistrationData");
-          toast.error("Failed to complete registration");
-        }
-      }
-    };
+  //         localStorage.removeItem("vendorRegistrationData");
+  //         router.replace("/settings", undefined, { shallow: true });
+  //         setPaymentStatus("none");
+  //         toast.success("Organization registered successfully!");
+  //       } catch (error) {
+  //         console.error("Payment/Registration failed:", error);
+  //         setPaymentStatus("failed");
+  //         localStorage.removeItem("vendorRegistrationData");
+  //         toast.error("Failed to complete registration");
+  //       }
+  //     }
+  //   };
 
-    checkPaymentStatus();
-  }, [
-    router.query.payment,
-    publicKey,
-    createMultisig,
-    createOrganization,
-    userInfo,
-  ]);
+  //   checkPaymentStatus();
+  // }, [
+  //   router.query.payment,
+  //   publicKey,
+  //   createMultisig,
+  //   createOrganization,
+  //   userInfo,
+  // ]);
 
   // Check for pending registration on mount
-  useEffect(() => {
-    const storedData = localStorage.getItem("vendorRegistrationData");
-    if (storedData) {
-      setPaymentStatus("pending");
-    }
-  }, []);
-
-  const handleResetRegistration = () => {
-    localStorage.removeItem("vendorRegistrationData");
-    setPaymentStatus("none");
-    toast.success("Registration reset successfully");
-  };
+  // useEffect(() => {
+  //   const storedData = localStorage.getItem("vendorRegistrationData");
+  //   if (storedData) {
+  //     setPaymentStatus("pending");
+  //   }
+  // }, []);
 
   const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -236,19 +234,19 @@ export default function SettingsPage() {
     }
   };
 
-  const handleUpdateMember = async (updates: {
-    role: Role;
-    name?: string;
-    wallet_address?: string;
-  }) => {
+  const handleUpdateMember = async (updates: UpdateMemberInput) => {
     if (!editingMember) return;
 
     try {
-      await updateMember.mutateAsync({
-        userId: editingMember.user_id,
-        updates,
-      });
-      toast.success("Member updated successfully!");
+      if (editingMember.user_id) {
+        await updateMember.mutateAsync({
+          userId: editingMember.user_id,
+          updates,
+        });
+        toast.success("Member updated successfully!");
+      } else {
+        toast.error("Cannot update member without user ID");
+      }
       setEditingMember(null);
     } catch (error) {
       toast.error("Failed to update member");
@@ -256,8 +254,8 @@ export default function SettingsPage() {
     }
   };
 
-  const handleRemoveMember = async (userId: string) => {
-    if (!organization?.id) return;
+  const handleRemoveMember = async (userId: string | undefined) => {
+    if (!organization?.id || !userId) return;
 
     try {
       await removeMember.mutateAsync(userId);
@@ -277,58 +275,11 @@ export default function SettingsPage() {
     return <div>Loading user data...</div>;
   }
 
-  const renderPaymentStatus = () => {
-    switch (paymentStatus) {
-      case "pending":
-        return (
-          <Alert className="mb-4">
-            <AlertDescription>
-              Awaiting payment confirmation...
-              <Button
-                variant="link"
-                onClick={handleResetRegistration}
-                className="ml-2 text-sm"
-              >
-                Reset Registration
-              </Button>
-            </AlertDescription>
-          </Alert>
-        );
-      case "processing":
-        return (
-          <Alert className="mb-4">
-            <AlertDescription>Processing your registration...</AlertDescription>
-          </Alert>
-        );
-      case "failed":
-        return (
-          <Alert className="mb-4" variant="destructive">
-            <AlertDescription>
-              Payment verification failed. Please try again.
-              <Button
-                variant="link"
-                onClick={handleResetRegistration}
-                className="ml-2 text-sm"
-              >
-                Start New Registration
-              </Button>
-            </AlertDescription>
-          </Alert>
-        );
-      default:
-        return null;
-    }
-  };
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="container mx-auto px-4 py-4">
-          <h1 className="text-xl font-bold">Settings</h1>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto space-y-8">
+    <main className="container mx-auto py-8 ">
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="space-y-4">
+          <h1 className="text-xl font-bold text-tertiary">Settings</h1>
           {/* Profile Settings */}
           <Card>
             <CardHeader>
@@ -349,205 +300,203 @@ export default function SettingsPage() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Organization */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Organization</CardTitle>
-              {!organization && paymentStatus === "none" && (
-                <VendorRegistrationModal
-                  isOpen={isCreateOrgModalOpen}
-                  onOpenChange={setIsCreateOrgModalOpen}
-                  userInfo={userInfo}
-                  onSubmitSuccess={() => {
-                    setPaymentStatus("none");
-                  }}
-                  createMultisig={createMultisig}
-                  createOrganization={createOrganization}
-                />
-              )}
-            </CardHeader>
-            <CardContent>
-              {renderPaymentStatus()}
-
-              {organization ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Organization Name</Label>
-                      <p className="mt-1">{organization.name}</p>
-                    </div>
-                    <div>
-                      <Label>Multisig Wallet</Label>
-                      <p className="mt-1 truncate">
-                        {organization.multisig_wallet}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Team Members */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">Team Members</h3>
-                      {canModifyMembers && (
-                        <Dialog
-                          open={isAddMemberModalOpen}
-                          onOpenChange={setIsAddMemberModalOpen}
-                        >
-                          <DialogTrigger asChild>
-                            <Button>
-                              <FiPlus className="mr-2" /> Add Member
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Add Team Member</DialogTitle>
-                            </DialogHeader>
-                            <form
-                              onSubmit={handleAddMember}
-                              className="space-y-4"
-                            >
-                              <div className="space-y-2">
-                                <Label>Full Name</Label>
-                                <Input name="name" required />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Email</Label>
-                                <Input name="email" type="email" required />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Wallet Address</Label>
-                                <Input name="walletAddress" required />
-                              </div>
-                              <div className="space-y-2">
-                                <Label>Role</Label>
-                                <Select name="role" required>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select role" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="admin">Admin</SelectItem>
-                                    <SelectItem value="user">User</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <Button type="submit" className="w-full">
-                                Add Member
-                              </Button>
-                            </form>
-                          </DialogContent>
-                        </Dialog>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      {membersLoading ? (
-                        <div className="space-y-2">
-                          {[1, 2, 3].map((i) => (
-                            <Skeleton
-                              key={i}
-                              className="h-24 w-full rounded-lg"
-                            />
-                          ))}
-                        </div>
-                      ) : members?.length === 0 ? (
-                        <div>No team members yet</div>
-                      ) : (
-                        members?.map((member) => (
-                          <div
-                            key={member.user_id}
-                            className="flex items-center justify-between p-4 border rounded-lg"
-                          >
-                            <div>
-                              <p className="font-medium">{member.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {member.email}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {member.role.charAt(0).toUpperCase() +
-                                  member.role.slice(1)}
-                              </p>
-                              <p className="text-sm text-muted-foreground truncate">
-                                {member.wallet_address}
-                              </p>
-                            </div>
-                            {canModifyMembers && (
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setEditingMember(member)}
-                                >
-                                  <FiEdit2 />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() =>
-                                    handleRemoveMember(member.user_id)
-                                  }
-                                >
-                                  <FiTrash2 />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : orgLoading ? (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Organization Name</Label>
-                      <Skeleton className="h-6 w-[200px] mt-1" />
-                    </div>
-                    <div>
-                      <Label>Multisig Wallet</Label>
-                      <Skeleton className="h-6 w-[300px] mt-1" />
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-medium">Team Members</h3>
-                    </div>
-                    <div className="space-y-2">
-                      {[1, 2].map((i) => (
-                        <Skeleton key={i} className="h-24 w-full rounded-lg" />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : paymentStatus === "pending" ? (
-                <div className="text-center py-8">
-                  <FiUsers className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-medium">
-                    Registration In Progress
-                  </h3>
-                  <p className="mt-2 text-muted-foreground text-sm">
-                    Waiting for payment confirmation from Coinbase.
-                  </p>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <FiUsers className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-medium">
-                    No Business Registered
-                  </h3>
-                  <p className="mt-2 text-muted-foreground text-sm">
-                    Create an organization to start managing your team and
-                    making payments.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
-      </main>
 
+        {/* Organization */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Organization</CardTitle>
+            {!organization && (
+              <VendorRegistrationModal
+                isOpen={isCreateOrgModalOpen}
+                onOpenChange={setIsCreateOrgModalOpen}
+                userInfo={userInfo}
+                onSubmitSuccess={() => {
+                  // setPaymentStatus("none");
+                }}
+                createMultisig={createMultisig}
+                createOrganization={createOrganization}
+              />
+            )}
+          </CardHeader>
+          <CardContent>
+            {/* {renderPaymentStatus()} */}
+
+            {organization ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Name</Label>
+                    <p className="mt-1 text-xs">{organization.name}</p>
+                  </div>
+                  <div>
+                    <Label>Multisig Wallet</Label>
+                    <p className="mt-1 truncate text-xs">
+                      {organization.multisig_wallet}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Team Members */}
+                <div className="space-y-4">
+                  <div className="flex items-end justify-between">
+                    <h3 className="text-sm font-medium"> Members</h3>
+                    {canModifyMembers && (
+                      <Dialog
+                        open={isAddMemberModalOpen}
+                        onOpenChange={setIsAddMemberModalOpen}
+                      >
+                        <DialogTrigger asChild>
+                          <Button>
+                            <FiPlus className="mr-2" /> Add Member
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add Member</DialogTitle>
+                          </DialogHeader>
+                          <form
+                            onSubmit={handleAddMember}
+                            className="space-y-4"
+                          >
+                            <div className="space-y-2">
+                              <Label>Full Name</Label>
+                              <Input name="name" required />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Email</Label>
+                              <Input name="email" type="email" required />
+                            </div>
+                            {/* <div className="space-y-2">
+                              <Label>Wallet Address</Label>
+                              <Input name="walletAddress" required />
+                            </div> */}
+                            <div className="space-y-2">
+                              <Label>Role</Label>
+                              <Select name="role" required>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                  <SelectItem value="user">User</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {/* <Button type="submit" className="w-full">
+                              Add Member 
+                            </Button> */}
+
+                            <Button type="submit" className="w-full" disabled>
+                              COMING SOON
+                            </Button>
+                          </form>
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    {membersLoading ? (
+                      <div className="space-y-2">
+                        {[1, 2, 3].map((i) => (
+                          <Skeleton
+                            key={i}
+                            className="h-24 w-full rounded-lg"
+                          />
+                        ))}
+                      </div>
+                    ) : members?.length === 0 ? (
+                      <div>No team members yet</div>
+                    ) : (
+                      members?.map((member: OrganizationMemberResponse) => (
+                        <div
+                          key={member.user_id}
+                          className="flex items-center justify-between p-4 border rounded-lg"
+                        >
+                          <div>
+                            <p className="font-medium">
+                              {member.name || "N/A"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {member.email || "N/A"}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {member.role.charAt(0).toUpperCase() +
+                                member.role.slice(1)}
+                            </p>
+                            <p className="text-sm text-muted-foreground truncate">
+                              {member.wallet_address || "N/A"}
+                            </p>
+                          </div>
+                          {canModifyMembers && (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingMember(member)}
+                              >
+                                <FiEdit2 />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() =>
+                                  member.user_id
+                                    ? handleRemoveMember(member.user_id)
+                                    : undefined
+                                }
+                                disabled={!member.user_id}
+                              >
+                                <FiTrash2 />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : orgLoading ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Organization</Label>
+                    <Skeleton className="h-6 w-[200px] mt-1" />
+                  </div>
+                  <div>
+                    <Label>Multisig Wallet</Label>
+                    <Skeleton className="h-6 w-[300px] mt-1" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-medium">Members</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {[1, 2].map((i) => (
+                      <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <FiUsers className="mx-auto h-8 w-8 text-muted-foreground" />
+                <h3 className="mt-4 text-lg font-medium">
+                  No Business Registered
+                </h3>
+                <p className="mt-2 text-muted-foreground text-sm">
+                  Create an organization to start managing your team and making
+                  payments.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
       {/* Edit Member Modal */}
       {editingMember && (
         <EditMemberModal
@@ -557,6 +506,6 @@ export default function SettingsPage() {
           onSubmit={handleUpdateMember}
         />
       )}
-    </div>
+    </main>
   );
 }

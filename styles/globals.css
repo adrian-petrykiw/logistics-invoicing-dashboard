@@ -10,6 +10,12 @@
   }
 }
 
+  @layer base {
+    .font-montserrat {
+      font-family: Montserrat, system-ui, sans-serif;
+    }
+  }
+
 /* Optional: Add custom font smoothing for better rendering */
 html {
   -webkit-font-smoothing: antialiased;

@@ -1,13 +1,27 @@
+// hooks/useApi.ts
 import { useCallback } from "react";
 import type { AxiosRequestConfig } from "axios";
-import { useAuth } from "@/features/auth/hooks/useAuth";
 import { api } from "@/lib/api";
+import type { AuthUser } from "@/types/auth";
 
-export const useApi = () => {
-  const { user } = useAuth();
+type ApiUser = {
+  email: string;
+  walletAddress: string;
+  userInfo: any;
+} | null;
 
+export const getAuthHeaders = (user: ApiUser) => {
+  if (!user) return {};
+  return {
+    "x-user-email": user.email,
+    "x-wallet-address": user.walletAddress,
+    "x-user-info": JSON.stringify(user.userInfo),
+  };
+};
+
+export const useApi = (user: ApiUser) => {
   const request = useCallback(
-    async <T>(config: AxiosRequestConfig): Promise<T> => {
+    async <T = any>(config: AxiosRequestConfig): Promise<T> => {
       if (!user) {
         throw new Error("Not authenticated");
       }
@@ -16,9 +30,7 @@ export const useApi = () => {
         ...config,
         headers: {
           ...config.headers,
-          "x-user-email": user.email,
-          "x-wallet-address": user.walletAddress,
-          "x-user-info": JSON.stringify(user.userInfo),
+          ...getAuthHeaders(user),
         },
       });
 
@@ -28,26 +40,21 @@ export const useApi = () => {
   );
 
   return {
-    get: <T>(
+    get: <T = any>(
       url: string,
       config?: Omit<AxiosRequestConfig, "url" | "method">
     ) => request<T>({ ...config, url, method: "GET" }),
-    post: <T>(
+    post: <T = any>(
       url: string,
       data?: any,
       config?: Omit<AxiosRequestConfig, "url" | "method" | "data">
     ) => request<T>({ ...config, url, method: "POST", data }),
-    put: <T>(
-      url: string,
-      data?: any,
-      config?: Omit<AxiosRequestConfig, "url" | "method" | "data">
-    ) => request<T>({ ...config, url, method: "PUT", data }),
-    patch: <T>(
+    patch: <T = any>(
       url: string,
       data?: any,
       config?: Omit<AxiosRequestConfig, "url" | "method" | "data">
     ) => request<T>({ ...config, url, method: "PATCH", data }),
-    delete: <T>(
+    delete: <T = any>(
       url: string,
       config?: Omit<AxiosRequestConfig, "url" | "method">
     ) => request<T>({ ...config, url, method: "DELETE" }),

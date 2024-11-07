@@ -1,73 +1,177 @@
-import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiResponse } from "next";
 import { supabaseAdmin } from "../_lib/supabase";
-import { CreateOrganizationInputSchema } from "@/schemas/organizationSchemas";
+import {
+  CreateOrganizationInputSchema,
+  Organization,
+  ApiError,
+  ApiResponse,
+  OrganizationResponseSchema,
+  OrganizationWithMemberSchema,
+} from "@/schemas/organizationSchemas";
+import { withAuth, AuthedRequest } from "../_lib/auth";
+import { z } from "zod";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  // Get user info from middleware-added headers
-  const userId = req.headers["x-supabase-user-id"] as string;
-  const walletAddress = req.headers["x-wallet-address"] as string;
-
-  if (!userId || !walletAddress) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
+async function handler(
+  req: AuthedRequest,
+  res: NextApiResponse<ApiResponse<Organization[] | Organization>>
+): Promise<void> {
   try {
     switch (req.method) {
-      case "GET":
-        // Get organizations where user is a member
-        const { data: organizations, error: getError } = await supabaseAdmin
+      case "GET": {
+        const { data: rawOrganizations, error: getError } = await supabaseAdmin
           .from("organizations")
           .select(
             `
-            *,
-            organization_members!inner (
-              role
-            )
-          `
+      *,
+      organization_members!inner (
+        role
+      )
+    `
           )
-          .eq("organization_members.user_id", userId);
+          .eq("organization_members.user_id", req.user!.id);
 
-        if (getError) throw getError;
-        return res.status(200).json(organizations);
-
-      case "POST":
-        const validatedData = CreateOrganizationInputSchema.parse(req.body);
-
-        // Start a transaction
-        const { data: newOrg, error: createOrgError } = await supabaseAdmin
-          .from("organizations")
-          .insert({
-            ...validatedData,
-            created_by: userId,
-          })
-          .select()
-          .single();
-
-        if (createOrgError) throw createOrgError;
-
-        // Add creator as owner
-        const { error: createMemberError } = await supabaseAdmin
-          .from("organization_members")
-          .insert({
-            user_id: userId,
-            organization_id: newOrg.id,
-            role: "owner",
-            personal_wallet: walletAddress,
+        if (getError) {
+          console.error("Database error:", getError);
+          return res.status(500).json({
+            success: false,
+            error: {
+              error: "Failed to fetch organizations",
+              code: "DB_ERROR",
+              details: getError,
+            },
           });
+        }
 
-        if (createMemberError) throw createMemberError;
+        try {
+          const validatedOrgs = z
+            .array(OrganizationWithMemberSchema)
+            .parse(rawOrganizations);
+          const organizations = validatedOrgs.map(
+            ({ organization_members, ...org }) => org
+          );
 
-        return res.status(201).json(newOrg);
+          return res.status(200).json({
+            success: true,
+            data: organizations,
+          });
+        } catch (validationError) {
+          console.error("Validation error:", validationError);
+          return res.status(500).json({
+            success: false,
+            error: {
+              error: "Invalid data format",
+              code: "VALIDATION_ERROR",
+              details:
+                validationError instanceof Error
+                  ? validationError.message
+                  : "Unknown validation error",
+            },
+          });
+        }
+      }
+
+      case "POST": {
+        try {
+          const validatedData = CreateOrganizationInputSchema.parse(req.body);
+
+          console.log("Creating organization with data:", validatedData);
+
+          const { data: newOrg, error: createOrgError } = await supabaseAdmin
+            .from("organizations")
+            .insert({
+              name: validatedData.name,
+              multisig_wallet: validatedData.multisig_wallet,
+              business_details: validatedData.business_details,
+              created_by: req.user.id,
+            })
+            .select()
+            .single();
+
+          if (createOrgError) throw createOrgError;
+
+          console.log("Raw organization data from Supabase:", newOrg);
+
+          // Format the timestamp to match our expected format
+          const formattedOrg = {
+            ...newOrg,
+            created_at: new Date(newOrg.created_at).toISOString(),
+          };
+
+          console.log("Formatted organization data:", formattedOrg);
+
+          try {
+            const validatedOrg = OrganizationResponseSchema.parse(formattedOrg);
+
+            // Add owner member record
+            const { error: createMemberError } = await supabaseAdmin
+              .from("organization_members")
+              .insert({
+                user_id: req.user.id,
+                organization_id: validatedOrg.id,
+                role: "owner",
+                status: "active",
+                wallet_address: req.user.walletAddress,
+                name: validatedData.business_details.ownerName,
+                email: validatedData.business_details.ownerEmail,
+              });
+
+            if (createMemberError) {
+              await supabaseAdmin
+                .from("organizations")
+                .delete()
+                .eq("id", validatedOrg.id);
+              throw createMemberError;
+            }
+
+            return res.status(201).json({
+              success: true,
+              data: validatedOrg,
+            });
+          } catch (validationError) {
+            console.error("Validation error:", validationError);
+            // Cleanup the created organization if validation fails
+            await supabaseAdmin
+              .from("organizations")
+              .delete()
+              .eq("id", newOrg.id);
+
+            throw validationError;
+          }
+        } catch (error) {
+          console.error("Organization creation error:", error);
+          return res.status(500).json({
+            success: false,
+            error: {
+              error: "Failed to create organization",
+              message: error instanceof Error ? error.message : String(error),
+              code: error instanceof Error ? error.name : "CREATE_ERROR",
+              details: error,
+            },
+          });
+        }
+      }
 
       default:
         res.setHeader("Allow", ["GET", "POST"]);
-        return res.status(405).end(`Method ${req.method} Not Allowed`);
+        return res.status(405).json({
+          success: false,
+          error: {
+            error: `Method ${req.method} Not Allowed`,
+            code: "METHOD_NOT_ALLOWED",
+          },
+        });
     }
   } catch (error) {
     console.error("API Error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    return res.status(500).json({
+      success: false,
+      error: {
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : String(error),
+        code: error instanceof Error ? error.name : "UNKNOWN_ERROR",
+      },
+    });
   }
 }
+
+export default withAuth(handler);

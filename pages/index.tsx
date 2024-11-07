@@ -32,7 +32,9 @@ export default function LandingPage() {
       {/* Navigation */}
       <nav className="border-b border-secondary px-6 py-4">
         <div className="container mx-auto flex justify-between items-center">
-          <h1 className="text-xl font-extrabold text-tertiary">INVOICE</h1>
+          <h1 className="text-xl font-bold text-tertiary font-montserrat">
+            CARGOBILL
+          </h1>
           <div className="flex items-center gap-4">
             <ParticleAuthButton />
           </div>
@@ -61,12 +63,12 @@ export default function LandingPage() {
           <FeatureCard
             icon={<FiDollarSign className="w-8 h-8" />}
             title="Low Fee"
-            description="Simple $10 fee on payments over $1000"
+            description="Simple $5 fee on payments over $1000"
           />
           <FeatureCard
             icon={<FiLock className="w-8 h-8" />}
             title="Secure"
-            description="Manage your team's permissions, set spending limits, and batch transactions"
+            description="Manage your team's permissions, set spending limits, and batch invoices"
           />
         </div>
       </main>

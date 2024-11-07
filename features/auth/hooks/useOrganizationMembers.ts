@@ -2,33 +2,34 @@ import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import {
   AddMemberInput,
-  OrganizationMember,
-  UpdateMemberInput,
-  Role,
+  OrganizationMemberResponse,
+  UpdateMemberParams,
+  ApiResponse,
 } from "@/schemas/organizationSchemas";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useOrganizationMembers = (organizationId: string | null) => {
-  const api = useApi();
+  const { user, isLoading: authLoading } = useAuth();
+  const api = useApi(user || null);
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
-  // Get members with their user details
-  const { data: membersWithDetails, isLoading } = useQuery({
+  const { data: response, isLoading } = useQuery({
     queryKey: ["organization-members", organizationId],
     queryFn: async () => {
-      if (!organizationId) return [];
-      return api.get<
-        (OrganizationMember & {
-          name: string;
-          email: string;
-        })[]
-      >(`/organizations/${organizationId}/members`);
+      if (!organizationId) return { success: true, data: [] };
+      console.log("Fetching members for organization:", organizationId);
+      const response = await api.get<ApiResponse<OrganizationMemberResponse[]>>(
+        `/organizations/${organizationId}/members`
+      );
+      console.log("Members response:", response);
+      return response;
     },
-    enabled: !!organizationId,
+    enabled: !!organizationId && !!user && !authLoading,
   });
 
-  const currentUserRole = membersWithDetails?.find(
+  const members = response?.success ? response.data : [];
+
+  const currentUserRole = members?.find(
     (member) => member.email === user?.email
   )?.role;
 
@@ -37,46 +38,71 @@ export const useOrganizationMembers = (organizationId: string | null) => {
 
   const addMember = useMutation({
     mutationFn: async (newMember: AddMemberInput) => {
-      return api.post<OrganizationMember>(
+      console.log("Adding new member:", newMember);
+      const response = await api.post<ApiResponse<OrganizationMemberResponse>>(
         `/organizations/${organizationId}/members`,
         newMember
       );
+      console.log("Add member response:", response);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+    },
+    onError: (error) => {
+      console.error("Add member error:", error);
+      throw error;
     },
   });
 
   const updateMember = useMutation({
-    mutationFn: async ({
-      userId,
-      updates,
-    }: {
-      userId: string;
-      updates: UpdateMemberInput;
-    }) => {
-      return api.patch<OrganizationMember>(
+    mutationFn: async ({ userId, updates }: UpdateMemberParams) => {
+      if (!userId || !organizationId) {
+        throw new Error("Invalid member or organization ID");
+      }
+
+      console.log("Updating member:", { userId, updates });
+      const response = await api.patch<ApiResponse<OrganizationMemberResponse>>(
         `/organizations/${organizationId}/members/${userId}`,
         updates
       );
+      console.log("Update member response:", response);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-members"] });
+    },
+    onError: (error) => {
+      console.error("Update member error:", error);
+      throw error;
     },
   });
 
   const removeMember = useMutation({
     mutationFn: async (userId: string) => {
-      return api.delete(`/organizations/${organizationId}/members/${userId}`);
+      if (!organizationId) {
+        throw new Error("Invalid organization ID");
+      }
+
+      console.log("Removing member:", userId);
+      const response = await api.delete<ApiResponse<void>>(
+        `/organizations/${organizationId}/members/${userId}`
+      );
+      console.log("Remove member response:", response);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organization-members"] });
     },
+    onError: (error) => {
+      console.error("Remove member error:", error);
+      throw error;
+    },
   });
 
   return {
-    members: membersWithDetails,
-    isLoading,
+    members,
+    isLoading: isLoading || authLoading,
     addMember,
     updateMember,
     removeMember,

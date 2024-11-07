@@ -26,19 +26,17 @@ const ParticleButtonContent = () => {
     }
   }, [connected, connecting, select]);
 
-  // Handle user info and navigation
   useEffect(() => {
     if (connected && wallet?.adapter.name === "Particle") {
-      // Only update email if it's different
       const email =
         window.particle?.auth.getUserInfo()?.email ||
-        window.particle?.auth.getUserInfo()?.google_email ||
-        "Connected";
+        window.particle?.auth.getUserInfo()?.google_email;
 
-      setUserEmail(email);
+      setUserEmail(email || "Connected");
 
-      // Only navigate if we're not already on dashboard
+      // Only navigate if we're not already on dashboard and user is authenticated
       if (router.pathname === "/") {
+        // The auth hook will automatically check for invites
         router.push("/dashboard");
       }
     } else {
@@ -111,7 +109,7 @@ const ParticleButtonContent = () => {
     <Button
       onClick={handleParticleConnect}
       disabled={connecting}
-      className="bg-tertiary hover:bg-quaternary text-white"
+      className="bg-tertiary hover:bg-quaternary text-primary"
     >
       Login/Signup
     </Button>

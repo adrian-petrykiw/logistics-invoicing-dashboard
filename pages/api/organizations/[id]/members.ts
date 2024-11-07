@@ -1,170 +1,135 @@
 // pages/api/organizations/[id]/members.ts
-import { NextApiRequest, NextApiResponse } from "next";
+import { NextApiResponse } from "next";
+import { z } from "zod";
+import {
+  ApiResponse,
+  OrganizationMemberResponse,
+  OrganizationMemberResponseSchema,
+  RoleSchema,
+  StatusSchema,
+} from "@/schemas/organizationSchemas";
+import { withAuth, AuthedRequest } from "@/pages/api/_lib/auth";
 import { supabaseAdmin } from "../../_lib/supabase";
-import { AddMemberInputSchema } from "@/schemas/organizationSchemas";
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+const RawMemberSchema = z.object({
+  user_id: z.string().uuid(),
+  organization_id: z.string().uuid(),
+  role: RoleSchema,
+  status: StatusSchema,
+  email: z.string().email().nullable(),
+  name: z.string().nullable(),
+  wallet_address: z.string().nullable(),
+  created_at: z.string(),
+  invited_by: z.string().uuid().nullable(),
+  invited_at: z.string().nullable(),
+  user: z
+    .object({
+      id: z.string().uuid(),
+      email: z.string().email(),
+      name: z.string().nullable(),
+      wallet_address: z.string(),
+    })
+    .nullable(),
+  inviter: z
+    .object({
+      id: z.string().uuid(),
+      email: z.string().email(),
+      name: z.string().nullable(),
+    })
+    .nullable(),
+});
+
+async function handler(
+  req: AuthedRequest,
+  res: NextApiResponse<ApiResponse<OrganizationMemberResponse[]>>
 ) {
-  const { id: organizationId } = req.query;
-  const userEmail = req.headers["x-user-email"] as string;
-
-  if (!userEmail) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+  const { id } = req.query;
 
   try {
-    // Check if user has permission (owner/admin)
-    const { data: membership, error: membershipError } = await supabaseAdmin
+    const { data: rawMembers, error: membersError } = await supabaseAdmin
       .from("organization_members")
       .select(
         `
-        role,
-        users!inner (
-          email
+        *,
+        user:users!organization_members_user_id_fkey (
+          id,
+          email,
+          name,
+          wallet_address
+        ),
+        inviter:users!organization_members_invited_by_fkey (
+          id,
+          email,
+          name
         )
       `
       )
-      .eq("organization_id", organizationId)
-      .eq("users.email", userEmail)
-      .single();
+      .eq("organization_id", id);
 
-    if (
-      membershipError ||
-      !membership ||
-      !["owner", "admin"].includes(membership.role)
-    ) {
-      return res.status(403).json({ error: "Insufficient permissions" });
+    if (membersError) {
+      console.error("Error fetching members:", membersError);
+      return res.status(500).json({
+        success: false,
+        error: {
+          error: "Failed to fetch organization members",
+          code: "FETCH_ERROR",
+          details: membersError,
+        },
+      });
     }
 
-    switch (req.method) {
-      case "GET":
-        // Get all members with their user details
-        const { data: members, error: getError } = await supabaseAdmin
-          .from("organization_members")
-          .select(
-            `
-            *,
-            users (
-              id,
-              email,
-              name,
-              wallet_address
-            )
-          `
-          )
-          .eq("organization_id", organizationId);
+    // Parse raw members first
+    const validatedRawMembers = z.array(RawMemberSchema).parse(rawMembers);
 
-        if (getError) throw getError;
+    // Transform into the response format
+    const transformedMembers = validatedRawMembers.map((member) => ({
+      user_id: member.user_id,
+      organization_id: member.organization_id,
+      role: member.role,
+      status: member.status,
+      email: member.user?.email || member.email,
+      name: member.user?.name || member.name,
+      wallet_address: member.user?.wallet_address || member.wallet_address,
+      created_at: member.created_at,
+      invited_by: member.invited_by,
+      invited_at: member.invited_at,
+      user: member.user
+        ? {
+            id: member.user.id,
+            email: member.user.email,
+            name: member.user.name,
+            wallet_address: member.user.wallet_address,
+          }
+        : null,
+      inviter: member.inviter
+        ? {
+            id: member.inviter.id,
+            email: member.inviter.email,
+            name: member.inviter.name,
+          }
+        : null,
+    }));
 
-        // Transform the response to flatten user details
-        const formattedMembers = members?.map((member) => ({
-          id: member.user_id,
-          email: member.users.email,
-          name: member.users.name,
-          role: member.role,
-          wallet_address: member.wallet_address,
-          created_at: member.created_at,
-          organization_id: member.organization_id,
-        }));
+    // Validate the transformed data
+    const validatedMembers = transformedMembers.map((member) =>
+      OrganizationMemberResponseSchema.parse(member)
+    );
 
-        return res.status(200).json(formattedMembers);
-
-      case "POST":
-        const validatedData = AddMemberInputSchema.parse(req.body);
-
-        // Check if user exists
-        const { data: existingUser, error: userError } = await supabaseAdmin
-          .from("users")
-          .select()
-          .eq("email", validatedData.email)
-          .single();
-
-        let targetUserId = existingUser?.id;
-
-        // Create new user if doesn't exist
-        if (!targetUserId) {
-          const { data: newUser, error: createUserError } = await supabaseAdmin
-            .from("users")
-            .insert({
-              email: validatedData.email,
-              name: validatedData.name,
-              wallet_address: validatedData.wallet_address,
-              particle_user_id: "pending", // Will be updated when they sign in
-            })
-            .select()
-            .single();
-
-          if (createUserError) throw createUserError;
-          targetUserId = newUser.id;
-        }
-
-        // Check if member already exists
-        const { data: existingMember } = await supabaseAdmin
-          .from("organization_members")
-          .select()
-          .eq("user_id", targetUserId)
-          .eq("organization_id", organizationId)
-          .single();
-
-        if (existingMember) {
-          return res.status(400).json({
-            error: "User is already a member of this organization",
-          });
-        }
-
-        // Create organization member
-        const { data: newMember, error: createError } = await supabaseAdmin
-          .from("organization_members")
-          .insert({
-            user_id: targetUserId,
-            organization_id: organizationId as string,
-            role: validatedData.role,
-            wallet_address: validatedData.wallet_address,
-          })
-          .select(
-            `
-            *,
-            users (
-              id,
-              email,
-              name,
-              wallet_address
-            )
-          `
-          )
-          .single();
-
-        if (createError) throw createError;
-
-        // Format response
-        const formattedMember = {
-          id: newMember.user_id,
-          email: newMember.users.email,
-          name: newMember.users.name,
-          role: newMember.role,
-          wallet_address: newMember.wallet_address,
-          created_at: newMember.created_at,
-          organization_id: newMember.organization_id,
-        };
-
-        return res.status(201).json(formattedMember);
-
-      case "PATCH":
-        // Handle member updates...
-        break;
-
-      case "DELETE":
-        // Handle member removal...
-        break;
-
-      default:
-        res.setHeader("Allow", ["GET", "POST", "PATCH", "DELETE"]);
-        return res.status(405).end(`Method ${req.method} Not Allowed`);
-    }
+    return res.status(200).json({
+      success: true,
+      data: validatedMembers,
+    });
   } catch (error) {
-    console.error("API Error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("Unexpected error:", error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        error: "An unexpected error occurred",
+        code: "INTERNAL_ERROR",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+    });
   }
 }
+
+export default withAuth(handler);
