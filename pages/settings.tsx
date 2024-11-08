@@ -120,7 +120,7 @@ export default function SettingsPage() {
   const [editingMember, setEditingMember] =
     useState<OrganizationMemberResponse | null>(null);
 
-  const { mutate: createMultisig, isPending } = useCreateMultisig();
+  const createMultisigMutation = useCreateMultisig();
 
   const {
     organization,
@@ -145,74 +145,6 @@ export default function SettingsPage() {
       });
     }
   }, [connected, wallet?.adapter.name]);
-
-  // Handle Coinbase payment status
-  // useEffect(() => {
-  //   const checkPaymentStatus = async () => {
-  //     const storedData = localStorage.getItem("vendorRegistrationData");
-
-  //     if (storedData && router.query.payment === "complete") {
-  //       try {
-  //         setPaymentStatus("processing");
-  //         const formData = JSON.parse(storedData);
-
-  //         // Implement webhook check here
-  //         // const paymentConfirmed = await checkPaymentWebhook(formData.partnerUserId);
-
-  //         // For now, proceed with organization creation
-  //         if (!publicKey) return;
-
-  //         // Create multisig wallet
-  //         const { multisigPda } = await createMultisig.mutateAsync({
-  //           creator: publicKey,
-  //           email: userInfo?.email || "",
-  //           configAuthority: publicKey,
-  //         });
-
-  //         // Create organization
-  //         await createOrganization.mutateAsync({
-  //           name: formData.companyName,
-  //           multisig_wallet: multisigPda.toBase58(),
-  //           owner_name: formData.ownerName,
-  //           owner_email: userInfo?.email || "",
-  //           owner_wallet_address: publicKey.toBase58(),
-  //           business_details: {
-  //             companyName: formData.companyName,
-  //             companyAddress: formData.companyAddress,
-  //             companyPhone: formData.companyPhone,
-  //             companyEmail: formData.companyEmail,
-  //           },
-  //         });
-
-  //         localStorage.removeItem("vendorRegistrationData");
-  //         router.replace("/settings", undefined, { shallow: true });
-  //         setPaymentStatus("none");
-  //         toast.success("Organization registered successfully!");
-  //       } catch (error) {
-  //         console.error("Payment/Registration failed:", error);
-  //         setPaymentStatus("failed");
-  //         localStorage.removeItem("vendorRegistrationData");
-  //         toast.error("Failed to complete registration");
-  //       }
-  //     }
-  //   };
-
-  //   checkPaymentStatus();
-  // }, [
-  //   router.query.payment,
-  //   publicKey,
-  //   createMultisig,
-  //   createOrganization,
-  //   userInfo,
-  // ]);
-
-  // Check for pending registration on mount
-  // useEffect(() => {
-  //   const storedData = localStorage.getItem("vendorRegistrationData");
-  //   if (storedData) {
-  //     setPaymentStatus("pending");
-  //   }
-  // }, []);
 
   const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -312,16 +244,14 @@ export default function SettingsPage() {
                 onOpenChange={setIsCreateOrgModalOpen}
                 userInfo={userInfo}
                 onSubmitSuccess={() => {}}
-                createMultisig={useCreateMultisig()}
+                createMultisig={createMultisigMutation}
                 createOrganization={createOrganization}
               />
             )}
           </CardHeader>
           <CardContent>
-            {/* {renderPaymentStatus()} */}
-
             {organization ? (
-              <div className="space-y-6">
+              <div className="space-y-12">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Name</Label>
@@ -338,7 +268,7 @@ export default function SettingsPage() {
                 {/* Team Members */}
                 <div className="space-y-4">
                   <div className="flex items-end justify-between">
-                    <h3 className="text-sm font-medium"> Members</h3>
+                    <h3 className="text-sm font-medium mb-[-8px]"> Members</h3>
                     {canModifyMembers && (
                       <Dialog
                         open={isAddMemberModalOpen}
@@ -348,6 +278,14 @@ export default function SettingsPage() {
                           <Button>
                             <FiPlus className="mr-2" /> Add Member
                           </Button>
+
+                          {/* <button
+                            type="button"
+                            // onClick={() => append({ number: "", amount: 0 })}
+                            className="font-light text-center text-sm text-muted-foreground hover:text-black transition-colors flex items-center justify-end mr-2"
+                          >
+                            <FiPlus className="mr-[4px]" /> Add Member
+                          </button> */}
                         </DialogTrigger>
                         <DialogContent>
                           <DialogHeader>
@@ -384,7 +322,6 @@ export default function SettingsPage() {
                             {/* <Button type="submit" className="w-full">
                               Add Member 
                             </Button> */}
-
                             <Button type="submit" className="w-full" disabled>
                               COMING SOON
                             </Button>
@@ -410,22 +347,24 @@ export default function SettingsPage() {
                       members?.map((member: OrganizationMemberResponse) => (
                         <div
                           key={member.user_id}
-                          className="flex items-center justify-between p-4 border rounded-lg"
+                          className="flex items-center justify-between p-4 border border-gray-300 rounded-lg"
                         >
-                          <div>
-                            <p className="font-medium">
-                              {member.name || "N/A"}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {member.email || "N/A"}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
+                          <div className="flex flex-row justify-between items-center w-full mr-4">
+                            <div>
+                              <p className="font-medium text-sm">
+                                {member.name || "N/A"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {member.email || "N/A"}
+                              </p>
+                            </div>
+                            <p className="text-sm text-muted-foreground font-medium">
                               {member.role.charAt(0).toUpperCase() +
                                 member.role.slice(1)}
                             </p>
-                            <p className="text-sm text-muted-foreground truncate">
+                            {/* <p className="text-sm text-muted-foreground truncate">
                               {member.wallet_address || "N/A"}
-                            </p>
+                            </p> */}
                           </div>
                           {canModifyMembers && member.role !== "owner" && (
                             <div className="flex gap-2">

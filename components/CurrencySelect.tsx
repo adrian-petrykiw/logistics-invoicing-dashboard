@@ -24,6 +24,7 @@ export function CurrencySelect({
 }) {
   const allCurrencies = {
     ...FIAT_CURRENCIES,
+    ...SUPPORTED_STABLECOINS,
   };
 
   return (
