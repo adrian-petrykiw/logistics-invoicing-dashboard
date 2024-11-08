@@ -29,10 +29,10 @@ import {
   OrganizationMemberResponse,
   Role,
   UpdateMemberInput,
-} from "@/schemas/organizationSchemas";
-import { useSquads } from "@/hooks/useSquads";
+} from "@/schemas/organization";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VendorRegistrationModal } from "@/features/settings/components/RegistrationModal";
+import { useCreateMultisig } from "@/hooks/squads";
 
 interface EditMemberModalProps {
   member: OrganizationMemberResponse;
@@ -120,7 +120,7 @@ export default function SettingsPage() {
   const [editingMember, setEditingMember] =
     useState<OrganizationMemberResponse | null>(null);
 
-  const { createMultisig } = useSquads();
+  const { mutate: createMultisig, isPending } = useCreateMultisig();
 
   const {
     organization,
@@ -311,10 +311,8 @@ export default function SettingsPage() {
                 isOpen={isCreateOrgModalOpen}
                 onOpenChange={setIsCreateOrgModalOpen}
                 userInfo={userInfo}
-                onSubmitSuccess={() => {
-                  // setPaymentStatus("none");
-                }}
-                createMultisig={createMultisig}
+                onSubmitSuccess={() => {}}
+                createMultisig={useCreateMultisig()}
                 createOrganization={createOrganization}
               />
             )}

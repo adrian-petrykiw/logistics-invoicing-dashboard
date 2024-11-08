@@ -16,12 +16,12 @@ export async function getOrCreateUser(req: NextApiRequest) {
   const userInfo = req.headers["x-user-info"];
   const walletAddress = req.headers["x-wallet-address"] as string;
 
-  console.log("Auth Headers:", {
-    userEmail,
-    userInfo,
-    walletAddress,
-    allHeaders: req.headers,
-  });
+  // console.log("Auth Headers:", {
+  //   userEmail,
+  //   userInfo,
+  //   walletAddress,
+  //   allHeaders: req.headers,
+  // });
 
   if (!userEmail || !walletAddress) {
     return null;

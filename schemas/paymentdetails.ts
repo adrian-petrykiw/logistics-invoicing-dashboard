@@ -51,7 +51,7 @@ export const paymentDetailsSchema = z.discriminatedUnion("paymentMethod", [
 ]);
 
 export type PaymentDetailsFormValues = z.infer<typeof paymentDetailsSchema>;
-import { CombinedFormValues } from "@/schemas/combinedFormSchema";
+import { CombinedFormValues } from "@/schemas/combinedform";
 
 export interface PaymentDetailsFormProps {
   onNext: (

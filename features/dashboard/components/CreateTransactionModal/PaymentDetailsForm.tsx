@@ -22,7 +22,7 @@ import {
   PaymentDetailsFormProps,
   PaymentDetailsFormValues,
   paymentDetailsSchema,
-} from "@/schemas/paymentDetailsSchema";
+} from "@/schemas/paymentdetails";
 import { Card, CardContent } from "@/components/ui/card";
 
 export function PaymentDetailsForm({

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 // import { useSquadsWallet } from "@/features/dashboard/hooks/useSquadsWallet";
 import { CreateTransactionModal } from "@/features/dashboard/components/CreateTransactionModal/index";
+import { CurrentBalanceCard } from "@/features/dashboard/components/CurrentBalanceCard";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -42,19 +43,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-md font-medium text-tertiary">
-              Current Balance{" "}
-            </h3>
-            <div className="text-sm text-quaternary">$0.00 USD</div>
-          </div>
-          <div className="text-2xl font-bold text-tertiary">
-            {/* TODO: Add actual balance */}
-            0.00 USDC
-          </div>
-        </Card>
-
+        <CurrentBalanceCard balance={10.49} />
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-md font-medium text-tertiary">
@@ -66,7 +55,6 @@ export default function DashboardPage() {
             {/* TODO: Add actual count */}0
           </div>
         </Card>
-
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-md font-medium text-tertiary">
@@ -79,7 +67,6 @@ export default function DashboardPage() {
             0.00 USDC
           </div>
         </Card>
-
         {/* <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-md font-medium text-tertiary">Team</h3>

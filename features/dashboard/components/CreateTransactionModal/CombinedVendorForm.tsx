@@ -38,7 +38,7 @@ import {
   CombinedFormValues,
   CombinedVendorFormProps,
   createCombinedSchema,
-} from "@/schemas/combinedFormSchema";
+} from "@/schemas/combinedform";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const mockVendors = [

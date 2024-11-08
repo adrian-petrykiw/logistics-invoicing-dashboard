@@ -6,7 +6,7 @@ import {
   CreateOrganizationInput,
   OrganizationResponse,
   ApiResponse,
-} from "@/schemas/organizationSchemas";
+} from "@/schemas/organization";
 
 export const useOrganization = (userId: string) => {
   const { user, isLoading: authLoading } = useAuth();

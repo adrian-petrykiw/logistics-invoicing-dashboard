@@ -5,7 +5,7 @@ import {
   OrganizationMemberResponse,
   UpdateMemberParams,
   ApiResponse,
-} from "@/schemas/organizationSchemas";
+} from "@/schemas/organization";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export const useOrganizationMembers = (organizationId: string | null) => {

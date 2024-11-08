@@ -170,7 +170,7 @@ export class SquadsService {
   }
 
   // Fetch all transactions (both vault and config) for a multisig
-  async fetchAllTransactions(
+  async fetchAllMultisigTransactions(
     multisigPda: PublicKey
   ): Promise<(VaultTransactionInfo | ConfigTransactionInfo)[]> {
     try {

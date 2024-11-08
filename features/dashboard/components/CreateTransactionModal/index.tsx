@@ -11,8 +11,8 @@ import { Progress } from "@/components/ui/progress";
 import CombinedVendorForm from "./CombinedVendorForm";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/router";
-import { PaymentDetailsFormValues } from "@/schemas/paymentDetailsSchema";
-import { CombinedFormValues } from "@/schemas/combinedFormSchema";
+import { PaymentDetailsFormValues } from "@/schemas/paymentdetails";
+import { CombinedFormValues } from "@/schemas/combinedform";
 
 interface CreateTransactionModalProps {
   isOpen: boolean;

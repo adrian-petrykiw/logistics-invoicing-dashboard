@@ -21,10 +21,13 @@ import {
   CreateOrganizationInput,
   OrganizationResponse,
   ApiResponse,
-} from "@/schemas/organizationSchemas";
+} from "@/schemas/organization";
+import { CreateMultisigInput } from "@/schemas/squads";
 
-interface CreateMultisigResult {
+export interface CreateMultisigResult {
+  signature: string;
   multisigPda: PublicKey;
+  createKey: PublicKey;
 }
 
 interface VendorRegistrationModalProps {
@@ -34,8 +37,8 @@ interface VendorRegistrationModalProps {
   onSubmitSuccess: () => void;
   createMultisig: UseMutationResult<
     CreateMultisigResult,
-    unknown,
-    { creator: PublicKey; email: string; configAuthority: PublicKey },
+    Error,
+    CreateMultisigInput,
     unknown
   >;
   createOrganization: UseMutationResult<

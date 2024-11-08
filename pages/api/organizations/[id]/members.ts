@@ -7,7 +7,7 @@ import {
   OrganizationMemberResponseSchema,
   RoleSchema,
   StatusSchema,
-} from "@/schemas/organizationSchemas";
+} from "@/schemas/organization";
 import { withAuth, AuthedRequest } from "@/pages/api/_lib/auth";
 import { supabaseAdmin } from "../../_lib/supabase";
 

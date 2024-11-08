@@ -1,4 +1,3 @@
-// pages/api/auth/check-invites.ts
 import { NextApiResponse } from "next";
 import { AuthedRequest, withAuth } from "../_lib/auth";
 import { supabaseAdmin } from "../_lib/supabase";

@@ -7,7 +7,7 @@ import {
   ApiResponse,
   OrganizationResponseSchema,
   OrganizationWithMemberSchema,
-} from "@/schemas/organizationSchemas";
+} from "@/schemas/organization";
 import { withAuth, AuthedRequest } from "../_lib/auth";
 import { z } from "zod";
 
