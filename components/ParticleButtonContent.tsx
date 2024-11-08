@@ -1,3 +1,4 @@
+// components/ParticleButtonContent.tsx
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Button } from "@/components/ui/button";
 import { WalletName } from "@solana/wallet-adapter-base";
@@ -28,16 +29,21 @@ const ParticleButtonContent = () => {
 
   useEffect(() => {
     if (connected && wallet?.adapter.name === "Particle") {
-      const email =
-        window.particle?.auth.getUserInfo()?.email ||
-        window.particle?.auth.getUserInfo()?.google_email;
+      try {
+        // Safely access particle user info
+        const particleAuth = window?.particle?.auth;
+        const userInfo = particleAuth?.getUserInfo();
+        const email = userInfo?.email || userInfo?.google_email;
 
-      setUserEmail(email || "Connected");
+        setUserEmail(email || "Connected");
 
-      // Only navigate if we're not already on dashboard and user is authenticated
-      if (router.pathname === "/") {
-        // The auth hook will automatically check for invites
-        router.push("/dashboard");
+        // Only navigate if we're not already on dashboard
+        if (router.pathname === "/") {
+          router.push("/dashboard");
+        }
+      } catch (error) {
+        console.error("Error getting user info:", error);
+        setUserEmail("Connected");
       }
     } else {
       setUserEmail(null);
@@ -45,18 +51,18 @@ const ParticleButtonContent = () => {
   }, [connected, wallet?.adapter.name, router]);
 
   const handleRegister = useCallback(() => {
-    setIsOpen(false); // Close popover
+    setIsOpen(false);
     router.push("/settings");
   }, [router]);
 
   const handleSettings = useCallback(() => {
-    setIsOpen(false); // Close popover
+    setIsOpen(false);
     router.push("/settings");
   }, [router]);
 
   const handleLogout = useCallback(async () => {
     try {
-      setIsOpen(false); // Close popover
+      setIsOpen(false);
       await disconnect();
       router.push("/");
     } catch (error) {
@@ -111,7 +117,7 @@ const ParticleButtonContent = () => {
       disabled={connecting}
       className="bg-tertiary hover:bg-quaternary text-primary"
     >
-      Login/Signup
+      {connecting ? "Connecting..." : "Login/Signup"}
     </Button>
   );
 };

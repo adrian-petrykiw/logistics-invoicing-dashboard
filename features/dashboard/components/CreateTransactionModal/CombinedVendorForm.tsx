@@ -8,7 +8,7 @@ import {
 } from "@radix-ui/react-icons";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useState } from "react";
-import { useVendorDetails } from "@/hooks/useVendorDetails";
+import { mockVendors, useVendorDetails } from "@/hooks/useVendorDetails";
 import {
   Form,
   FormField,
@@ -41,11 +41,11 @@ import {
 } from "@/schemas/combinedform";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const mockVendors = [
-  { id: "vendor1", name: "PayCargo Vendor - Charlotte USA" },
-  { id: "vendor2", name: "PayCargo Vendor - Canada" },
-  { id: "vendor3", name: "PayCargo Vendor - India" },
-];
+// const mockVendors = [
+//   { id: "vendor1", name: "PayCargo Vendor - Charlotte USA" },
+//   { id: "vendor2", name: "PayCargo Vendor - Canada" },
+//   { id: "vendor3", name: "PayCargo Vendor - India" },
+// ];
 
 export function CombinedVendorForm({
   onNext,
@@ -178,7 +178,7 @@ export function CombinedVendorForm({
                       Please select a vendor to view details
                     </div>
                   ) : isLoading ? (
-                    <div className="space-y-2">
+                    <div className="space-y-1 p-2 m-0">
                       <Skeleton className="h-2 w-[250px]" />
                       <Skeleton className="h-2 w-[200px]" />
                       <Skeleton className="h-2 w-[150px]" />

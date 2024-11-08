@@ -1,26 +1,32 @@
-// hooks/useVendorDetails.ts
+import { MOCK_VENDORS } from "@/utils/constants";
 import { useQuery } from "@tanstack/react-query";
-import type { VendorDetails } from "@/types/types";
+
+export interface CustomField {
+  name: string;
+  required: boolean;
+  type: "text" | "number";
+  key: string;
+}
+
+export interface VendorDetails {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  type: "shipping" | "airline" | "forwarder" | "warehouse";
+  customFields: CustomField[];
+}
 
 async function fetchVendorDetails(vendorId: string): Promise<VendorDetails> {
-  // This will be replaced with actual API call
-  await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate network delay
+  // Simulate network delay
+  await new Promise((resolve) => setTimeout(resolve, 500));
 
-  // Mock data
-  return {
-    id: vendorId,
-    name: "PayCargo Vendor",
-    address: "201 Alhambra Cir Suite 711 Coral Gables, FL 33134",
-    phone: "(888) 250-7778",
-    customFields: [
-      {
-        name: "Related BOL/AWB #",
-        required: false,
-        type: "text",
-        key: "relatedBolAwb",
-      },
-    ],
-  };
+  const vendor = MOCK_VENDORS[vendorId];
+  if (!vendor) {
+    throw new Error(`Vendor with ID ${vendorId} not found`);
+  }
+
+  return vendor;
 }
 
 export function useVendorDetails(vendorId: string | null) {
@@ -28,7 +34,13 @@ export function useVendorDetails(vendorId: string | null) {
     queryKey: ["vendorDetails", vendorId],
     queryFn: () => (vendorId ? fetchVendorDetails(vendorId) : null),
     enabled: !!vendorId,
-    staleTime: 5 * 60 * 1000, // data fresh for 5 minutes
-    gcTime: 10 * 60 * 1000, // Unused data in cache for 10 minutes
+    staleTime: 10 * 60 * 1000, // data fresh for 5 minutes
+    gcTime: 15 * 60 * 1000, // Unused data in cache for 10 minutes
   });
 }
+
+// Export the mock vendors for use in other components
+export const mockVendors = Object.entries(MOCK_VENDORS).map(([id, vendor]) => ({
+  id,
+  name: vendor.name,
+}));

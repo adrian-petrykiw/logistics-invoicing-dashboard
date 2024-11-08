@@ -33,6 +33,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { VendorRegistrationModal } from "@/features/settings/components/RegistrationModal";
 import { useCreateMultisig } from "@/hooks/squads";
+import { PublicKey } from "@solana/web3.js";
+import { getVaultPda } from "@sqds/multisig";
+import Link from "next/link";
 
 interface EditMemberModalProps {
   member: OrganizationMemberResponse;
@@ -238,6 +241,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Organization</CardTitle>
+
             {!organization && (
               <VendorRegistrationModal
                 isOpen={isCreateOrgModalOpen}
@@ -251,17 +255,89 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent>
             {organization ? (
-              <div className="space-y-12">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Name</Label>
-                    <p className="mt-1 text-xs">{organization.name}</p>
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="col-span-2">
+                    {/* <Card className="bg-muted/50">
+                      <CardHeader className="pb-0 mb-2">
+                        <CardTitle className="text-sm">
+                          {organization.business_details?.companyName}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className=""></CardContent>
+                    </Card> */}
+                    <div className="p-4 border-gray-200 border-[1px] rounded-lg">
+                      <h4 className="text-sm font-semibold">
+                        {" "}
+                        {organization.business_details?.companyName}
+                      </h4>
+                      <div className="p-0 m-0 space-y-2">
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          <p className="text-xs text-muted-foreground">
+                            {organization.business_details?.companyAddress}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Registration #:{" "}
+                            {organization.business_details
+                              ?.registrationNumber || "N/A"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Tax ID:{" "}
+                            {organization.business_details?.taxNumber || "N/A"}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <p className="text-xs text-muted-foreground">
+                            Phone:{" "}
+                            {organization.business_details?.companyPhone ||
+                              "N/A"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Email: {organization.business_details?.companyEmail}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            <Link
+                              href={
+                                organization.business_details.companyWebsite
+                                  ? `${organization.business_details.companyWebsite}`
+                                  : ``
+                              }
+                            >
+                              Website:{" "}
+                              {organization.business_details.companyWebsite}
+                            </Link>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Multisig Wallet</Label>
-                    <p className="mt-1 truncate text-xs">
-                      {organization.multisig_wallet}
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium"> Multisig Account</p>
+                    <Input
+                      value={organization.multisig_wallet || ""}
+                      disabled
+                      type="text"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">
+                      {" "}
+                      Vault/Treasury Address
                     </p>
+                    <Input
+                      value={(() => {
+                        const [vaultPda] = getVaultPda({
+                          multisigPda: new PublicKey(
+                            organization.multisig_wallet
+                          ),
+                          index: 0,
+                        });
+                        return vaultPda.toBase58();
+                      })()}
+                      disabled
+                      type="text"
+                    />
                   </div>
                 </div>
 
@@ -398,15 +474,44 @@ export default function SettingsPage() {
               </div>
             ) : orgLoading ? (
               <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Organization</Label>
-                    <Skeleton className="h-6 w-[200px] mt-1" />
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="col-span-2">
+                    <Card className="bg-muted/50">
+                      <CardHeader>
+                        <CardTitle className="text-sm">
+                          Business Details
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4">
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-[250px]" />
+                          <Skeleton className="h-4 w-[200px]" />
+                          <Skeleton className="h-4 w-[150px]" />
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
-                  <div>
-                    <Label>Multisig Wallet</Label>
-                    <Skeleton className="h-6 w-[300px] mt-1" />
-                  </div>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">
+                        Multisig Account
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <Skeleton className="h-9 w-full" />
+                        <Skeleton className="h-9 w-full" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-sm">Vault Address</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                      <Skeleton className="h-9 w-full" />
+                    </CardContent>
+                  </Card>
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
