@@ -10,6 +10,7 @@ import {
   SUPPORTED_STABLECOINS,
   FIAT_CURRENCIES,
 } from "@/types/currency";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface CurrentBalanceCardProps {
   balance: number;
@@ -38,8 +39,8 @@ export function CurrentBalanceCard({
       : FIAT_CURRENCIES[baseCurrency as keyof typeof FIAT_CURRENCIES];
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-4">
+    <Card className="p-6 h-auto  flex flex-col justify-between">
+      <div className="flex items-center justify-between">
         <h3 className="text-md font-medium text-tertiary">Current Balance</h3>
         <Button
           variant="ghost"
@@ -62,10 +63,10 @@ export function CurrentBalanceCard({
           {/* {baseMetadata.symbol} */}
           {balance.toFixed(baseMetadata.decimals)} {baseCurrency}
         </div>
-        <div className="flex items-center gap-2 pb-[2px]">
-          <div className="flex items-center gap-2 text-sm text-quaternary">
+        <div className="flex items-center gap-[4px] pb-[2px]">
+          <div className="flex items-center gap-2 text-md text-quaternary">
             {isLoading || isRefetching ? (
-              "Loading..."
+              <Skeleton className="h-6 w-16" />
             ) : conversion ? (
               <>
                 {conversion.symbol}
