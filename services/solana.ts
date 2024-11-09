@@ -4,14 +4,40 @@ import {
   RpcResponseAndContext,
   SignatureResult,
   TransactionConfirmationStrategy,
+  PublicKey,
+  Commitment,
 } from "@solana/web3.js";
 
 export class SolanaService {
-  constructor(private connection: Connection) {}
+  private static instance: SolanaService;
+  private connection: Connection;
 
+  constructor() {
+    if (!process.env.NEXT_PUBLIC_SOLANA_RPC_URL) {
+      throw new Error("SOLANA_RPC_URL environment variable is not set");
+    }
+
+    this.connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL, {
+      commitment: "confirmed",
+      confirmTransactionInitialTimeout: 60000,
+    });
+  }
+
+  public static getInstance(): SolanaService {
+    if (!SolanaService.instance) {
+      SolanaService.instance = new SolanaService();
+    }
+    return SolanaService.instance;
+  }
+
+  public getConnection(): Connection {
+    return this.connection;
+  }
+
+  // Your existing confirmTransaction method
   async confirmTransaction(
     signature: TransactionSignature,
-    commitment: "processed" | "confirmed" | "finalized" = "confirmed"
+    commitment: Commitment = "confirmed"
   ): Promise<RpcResponseAndContext<SignatureResult>> {
     const latestBlockhash = await this.connection.getLatestBlockhash();
 
@@ -44,9 +70,10 @@ export class SolanaService {
     }
   }
 
+  // Your existing confirmTransactionWithRetry method
   async confirmTransactionWithRetry(
     signature: TransactionSignature,
-    commitment: "processed" | "confirmed" | "finalized" = "confirmed",
+    commitment: Commitment = "confirmed",
     maxRetries: number = 3,
     initialRetryDelay: number = 1000
   ): Promise<RpcResponseAndContext<SignatureResult>> {
@@ -74,9 +101,69 @@ export class SolanaService {
 
     throw lastError || new Error("Failed to confirm transaction after retries");
   }
+
+  // New helper method for getting account info with retries
+  async getAccountInfo(
+    address: string | PublicKey,
+    commitment: Commitment = "confirmed",
+    maxRetries = 3
+  ) {
+    const publicKey =
+      typeof address === "string" ? new PublicKey(address) : address;
+    let lastError;
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        console.log(
+          `Attempt ${i + 1} to get account info for ${publicKey.toBase58()}`
+        );
+        const accountInfo = await this.connection.getAccountInfo(
+          publicKey,
+          commitment
+        );
+        if (accountInfo) {
+          console.log(`Successfully got account info on attempt ${i + 1}`);
+          return accountInfo;
+        }
+        if (i < maxRetries - 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * Math.pow(2, i))
+          );
+        }
+      } catch (error) {
+        console.error(`Attempt ${i + 1} failed:`, error);
+        lastError = error;
+        if (i < maxRetries - 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * Math.pow(2, i))
+          );
+        }
+      }
+    }
+    throw (
+      lastError ||
+      new Error(`Could not get account info after ${maxRetries} attempts`)
+    );
+  }
+
+  // Helper method for consistent balance fetching
+  async getBalance(
+    address: string | PublicKey,
+    commitment: Commitment = "confirmed"
+  ): Promise<number> {
+    const publicKey =
+      typeof address === "string" ? new PublicKey(address) : address;
+    try {
+      return await this.connection.getBalance(publicKey, commitment);
+    } catch (error) {
+      console.error("Error fetching balance:", error);
+      throw error;
+    }
+  }
 }
 
-// Create singleton instance
-export const solanaService = new SolanaService(
-  new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL!)
-);
+// Export singleton instance
+export const solanaService = SolanaService.getInstance();
+
+// Also export Connection type for convenience
+export type { Connection };

@@ -178,10 +178,10 @@ export function CombinedVendorForm({
                       Please select a vendor to view details
                     </div>
                   ) : isLoading ? (
-                    <div className="space-y-1 p-2 m-0">
-                      <Skeleton className="h-2 w-[250px]" />
-                      <Skeleton className="h-2 w-[200px]" />
-                      <Skeleton className="h-2 w-[150px]" />
+                    <div className="space-y-1 p-0 m-0">
+                      <Skeleton className="h-[10px] w-[250px]" />
+                      <Skeleton className="h-[10px] w-[200px]" />
+                      <Skeleton className="h-[10px] w-[150px]" />
                     </div>
                   ) : vendorDetails ? (
                     <div className="p-0 m-0">

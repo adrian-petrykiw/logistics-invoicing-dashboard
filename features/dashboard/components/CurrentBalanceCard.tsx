@@ -1,26 +1,17 @@
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { CurrencySelect } from "@/components/CurrencySelect";
 import { useCurrencyConversion } from "@/hooks/useCurrency";
-import {
-  SupportedCurrency,
-  SUPPORTED_STABLECOINS,
-  FIAT_CURRENCIES,
-} from "@/types/currency";
+import { SupportedCurrency } from "@/types/currency";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMultisigVaultBalance } from "@/hooks/squads/useMultisigVaultBalance";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { getMultisigPda } from "@sqds/multisig";
 import { DepositModal } from "./DepositModal";
-
-interface CurrentBalanceCardProps {
-  balance: number;
-  baseCurrency?: SupportedCurrency;
-}
 
 function BalanceCard() {
   const { publicKey } = useWallet();
@@ -55,16 +46,13 @@ function BalanceCard() {
       </>
     ),
     multisigPda,
+    usdcBalance,
   };
 }
 
-export function CurrentBalanceCard({
-  balance,
-  baseCurrency = "USDC",
-}: CurrentBalanceCardProps) {
+export function CurrentBalanceCard() {
   const [targetCurrency, setTargetCurrency] =
     useState<SupportedCurrency>("USD");
-
   const balanceCard = BalanceCard();
 
   const {
@@ -72,13 +60,19 @@ export function CurrentBalanceCard({
     isLoading,
     refetch,
     isRefetching,
-  } = useCurrencyConversion(balance, baseCurrency, targetCurrency);
+  } = useCurrencyConversion(
+    balanceCard.usdcBalance ?? 0, // Use actual USDC balance
+    "USDC",
+    targetCurrency
+  );
 
   return (
     <Card className="p-4 h-auto flex flex-col justify-between items-stretch">
       <div className="flex items-stretch justify-between">
         <div className="flex items-start gap-2 justify-start">
-          <h3 className="text-md font-medium text-tertiary">Current Balance</h3>
+          <h3 className="text-md font-semibold text-tertiary">
+            Current Balance
+          </h3>
           <Button
             variant="ghost"
             size="sm"

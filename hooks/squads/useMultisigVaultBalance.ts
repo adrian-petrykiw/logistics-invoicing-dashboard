@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import * as multisig from "@sqds/multisig";
 import { TokenBalanceService } from "@/services/tokenbalance";
 
-export function useMultisigVaultBalance(multisigPda: PublicKey | null) {
-  const { connection } = useConnection();
+// Create a singleton instance of TokenBalanceService
+const tokenService = new TokenBalanceService();
 
+export function useMultisigVaultBalance(multisigPda: PublicKey | null) {
   return useQuery({
     queryKey: ["multisigBalance", multisigPda?.toBase58()],
     queryFn: async () => {
@@ -18,7 +18,6 @@ export function useMultisigVaultBalance(multisigPda: PublicKey | null) {
         index: 0,
       });
 
-      const tokenService = new TokenBalanceService(connection);
       const balance = await tokenService.getTokenBalance(
         vaultPda,
         TokenBalanceService.USDC_MINT
@@ -27,5 +26,7 @@ export function useMultisigVaultBalance(multisigPda: PublicKey | null) {
       return balance;
     },
     enabled: !!multisigPda,
+    retry: 3,
+    retryDelay: 1000,
   });
 }

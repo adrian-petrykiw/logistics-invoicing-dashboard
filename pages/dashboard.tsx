@@ -38,7 +38,9 @@ export default function DashboardPage() {
   return (
     <main className="container mx-auto py-8 ">
       <div className="flex justify-between items-end mb-4">
-        <h1 className="text-lg font-bold text-tertiary mb-0">Account Info</h1>
+        <h1 className="text-lg font-semibold text-tertiary mb-0">
+          Account Info
+        </h1>
         <Button
           onClick={() => setIsCreateModalOpen(true)}
           className="bg-tertiary text-primary hover:bg-quaternary"
@@ -49,10 +51,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <CurrentBalanceCard balance={10.49} />
+        <CurrentBalanceCard />
         <Card className="p-4 items-stretch">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-md font-medium text-tertiary">
+            <h3 className="text-md font-semibold text-tertiary">
               Transactions this Month
             </h3>
             <FiActivity className="text-quaternary" />
@@ -63,7 +65,7 @@ export default function DashboardPage() {
         </Card>
         <Card className="p-4 items-stretch">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-md font-medium text-tertiary">
+            <h3 className="text-md font-semibold text-tertiary">
               Yield Earnings{" "}
             </h3>
             <div className="flex items-center gap-2">
@@ -78,18 +80,6 @@ export default function DashboardPage() {
             0.00 USDC
           </div>
         </Card>
-        {/* <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-md font-medium text-tertiary">Team</h3>
-            <FiUsers className="text-quaternary" />
-          </div>
-          <div className="text-2xl font-bold text-tertiary">
-          {multisig?.members || None}
-
-        </div>
-
-          <div className="text-2xl font-bold text-tertiary">NA</div>
-        </Card> */}
       </div>
 
       <Card className="p-6">
