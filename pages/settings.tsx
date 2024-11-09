@@ -34,7 +34,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { VendorRegistrationModal } from "@/features/settings/components/RegistrationModal";
 import { useCreateMultisig } from "@/hooks/squads";
 import { PublicKey } from "@solana/web3.js";
-import { getVaultPda } from "@sqds/multisig";
+import { getMultisigPda, getVaultPda } from "@sqds/multisig";
 import Link from "next/link";
 
 interface EditMemberModalProps {
@@ -223,7 +223,12 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input value={userInfo.email} disabled type="email" />
+                <Input
+                  value={userInfo.email}
+                  disabled
+                  type="email"
+                  className="text-xs"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Wallet Address</Label>
@@ -231,6 +236,7 @@ export default function SettingsPage() {
                   value={publicKey?.toBase58() || ""}
                   disabled
                   type="text"
+                  className="text-xs"
                 />
               </div>
             </CardContent>
@@ -315,9 +321,21 @@ export default function SettingsPage() {
                   <div className="space-y-2">
                     <p className="text-sm font-medium"> Multisig Account</p>
                     <Input
-                      value={organization.multisig_wallet || ""}
+                      value={(() => {
+                        const createKey = PublicKey.findProgramAddressSync(
+                          [Buffer.from("squad"), publicKey!.toBuffer()],
+                          new PublicKey(
+                            "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
+                          )
+                        )[0];
+                        const [multisigPda] = getMultisigPda({
+                          createKey: createKey,
+                        });
+                        return multisigPda.toBase58();
+                      })()}
                       disabled
                       type="text"
+                      className="text-xs"
                     />
                   </div>
                   <div className="space-y-2">
@@ -327,16 +345,24 @@ export default function SettingsPage() {
                     </p>
                     <Input
                       value={(() => {
+                        const createKey = PublicKey.findProgramAddressSync(
+                          [Buffer.from("squad"), publicKey!.toBuffer()],
+                          new PublicKey(
+                            "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
+                          )
+                        )[0];
+                        const [multisigPda] = getMultisigPda({
+                          createKey: createKey,
+                        });
                         const [vaultPda] = getVaultPda({
-                          multisigPda: new PublicKey(
-                            organization.multisig_wallet
-                          ),
+                          multisigPda,
                           index: 0,
                         });
                         return vaultPda.toBase58();
                       })()}
                       disabled
                       type="text"
+                      className="text-xs"
                     />
                   </div>
                 </div>

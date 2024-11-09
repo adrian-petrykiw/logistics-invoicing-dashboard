@@ -52,6 +52,7 @@ export class TokenBalanceService {
         accountInfo = await this.connection.getAccountInfo(ata, {
           commitment: commitment,
         });
+
         if (!accountInfo) {
           attempts++;
           console.log(`Attempt ${attempts}: Retrying to get account info...`);

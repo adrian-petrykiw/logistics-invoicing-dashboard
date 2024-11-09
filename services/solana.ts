@@ -7,6 +7,11 @@ import {
   PublicKey,
   Commitment,
 } from "@solana/web3.js";
+import {
+  getAccount,
+  TokenAccountNotFoundError,
+  Account,
+} from "@solana/spl-token";
 
 export class SolanaService {
   private static instance: SolanaService;
@@ -102,7 +107,59 @@ export class SolanaService {
     throw lastError || new Error("Failed to confirm transaction after retries");
   }
 
-  // New helper method for getting account info with retries
+  async getAccount(
+    address: string | PublicKey,
+    commitment: Commitment = "confirmed",
+    maxRetries = 3
+  ): Promise<Account> {
+    const publicKey =
+      typeof address === "string" ? new PublicKey(address) : address;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        console.log(
+          `Attempt ${
+            attempt + 1
+          }: Getting token account ${publicKey.toBase58()}`
+        );
+
+        const tokenAccount = await getAccount(
+          this.connection,
+          publicKey,
+          commitment
+        );
+
+        console.log(
+          "Successfully retrieved token account:",
+          tokenAccount.address.toBase58()
+        );
+        return tokenAccount;
+      } catch (error) {
+        console.error(`Attempt ${attempt + 1} failed:`, error);
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        // If it's a TokenAccountNotFoundError, don't retry
+        if (error instanceof TokenAccountNotFoundError) {
+          throw error;
+        }
+
+        // If we haven't reached max retries yet, wait before trying again
+        if (attempt < maxRetries - 1) {
+          const delay = 1000 * Math.pow(2, attempt); // Exponential backoff
+          console.log(`Waiting ${delay}ms before retry...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // If we've exhausted all retries, throw the last error
+    throw (
+      lastError ||
+      new Error(`Failed to get token account after ${maxRetries} attempts`)
+    );
+  }
+
   async getAccountInfo(
     address: string | PublicKey,
     commitment: Commitment = "confirmed",

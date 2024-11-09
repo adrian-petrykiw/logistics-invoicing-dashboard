@@ -89,7 +89,7 @@ export function CurrentBalanceCard() {
             <span className="sr-only">Refresh price</span>
           </Button>
         </div>
-        <DepositModal multisigAddress={balanceCard.multisigPda.toBase58()} />
+        <DepositModal />
       </div>
       <div className="flex justify-between items-end">
         <div className="text-2xl font-bold text-tertiary">

@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { initOnRamp, InitOnRampParams } from "@coinbase/cbpay-js";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import {
   getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAccount,
+  TokenAccountNotFoundError,
 } from "@solana/spl-token";
 import * as multisig from "@sqds/multisig";
 import {
@@ -23,16 +24,15 @@ import { Label } from "@/components/ui/label";
 import { toast } from "react-hot-toast";
 import { solanaService } from "@/services/solana";
 
-interface DepositModalProps {
-  multisigAddress: string;
-}
-
-export function DepositModal({ multisigAddress }: DepositModalProps) {
+export function DepositModal() {
   const { publicKey } = useWallet();
-  const { connection } = useConnection();
+
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [vaultAddress, setVaultAddress] = useState<PublicKey | null>(null);
+  const [localMultisigPDA, setLocalMultisigPDA] = useState<PublicKey | null>(
+    null
+  );
   const [usdcAta, setUsdcAta] = useState<PublicKey | null>(null);
   const onrampInstance = useRef<any>(null);
 
@@ -50,9 +50,14 @@ export function DepositModal({ multisigAddress }: DepositModalProps) {
 
   useEffect(() => {
     const initializeAddresses = async () => {
-      if (!multisigAddress) return;
+      const createKey = PublicKey.findProgramAddressSync(
+        [Buffer.from("squad"), publicKey!.toBuffer()],
+        new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
+      )[0];
 
-      const multisigPda = new PublicKey(multisigAddress);
+      const [multisigPda] = multisig.getMultisigPda({
+        createKey: createKey,
+      });
 
       // Get vault PDA (index 0 is the default vault)
       const [vaultPda] = multisig.getVaultPda({
@@ -60,6 +65,7 @@ export function DepositModal({ multisigAddress }: DepositModalProps) {
         index: 0,
       });
       setVaultAddress(vaultPda);
+      setLocalMultisigPDA(multisigPda);
 
       // Get the vault's USDC ATA
       const ata = await getAssociatedTokenAddress(
@@ -73,7 +79,7 @@ export function DepositModal({ multisigAddress }: DepositModalProps) {
     };
 
     initializeAddresses();
-  }, [multisigAddress]);
+  }, []);
 
   const initializeAta = async () => {
     if (!vaultAddress || !usdcAta) return;
@@ -101,42 +107,42 @@ export function DepositModal({ multisigAddress }: DepositModalProps) {
     if (!vaultAddress || !publicKey || !usdcAta) return false;
 
     try {
-      // Get account info first to verify existence
-      const vaultInfo = await connection.getAccountInfo(
-        vaultAddress,
-        "confirmed"
-      );
-      const userInfo = await connection.getAccountInfo(publicKey, "confirmed");
-      const ataInfo = await connection.getAccountInfo(usdcAta, "confirmed");
+      // Get balances directly instead of checking account info
+      const [vaultBalance, userBalance] = await Promise.all([
+        solanaService.getBalance(vaultAddress, "confirmed"),
+        solanaService.getBalance(publicKey, "confirmed"),
+      ]);
 
-      const vaultBalance = vaultInfo ? vaultInfo.lamports : 0;
-      const userBalance = userInfo ? userInfo.lamports : 0;
-
-      console.log("Vault info exists:", !!vaultInfo);
-      console.log("User info exists:", !!userInfo);
-      console.log("ATA info exists:", !!ataInfo);
-      console.log("Raw vault balance:", vaultBalance);
-      console.log("Raw user balance:", userBalance);
+      // Check ATA existence using getAccount which is specific for token accounts
+      let ataExists = false;
+      try {
+        await solanaService.getAccount(usdcAta, "confirmed");
+        ataExists = true;
+      } catch (e) {
+        if (e instanceof TokenAccountNotFoundError) {
+          ataExists = false;
+        } else {
+          throw e;
+        }
+      }
 
       const vaultBalanceSol = vaultBalance / LAMPORTS_PER_SOL;
       const userBalanceSol = userBalance / LAMPORTS_PER_SOL;
 
-      console.log(
-        `Current vault ${vaultAddress} SOL balance:`,
-        vaultBalanceSol
-      );
-      console.log(`Current user ${publicKey} SOL balance:`, userBalanceSol);
+      console.log("Vault balance (SOL) lamports:", vaultBalanceSol);
+      console.log("User balance (SOL) lamports:", userBalanceSol);
 
-      // Determine what needs to be initialized
+      console.log("Vault balance (SOL):", vaultBalance);
+      console.log("User balance (SOL):", userBalance);
+
+      console.log("ATA exists:", ataExists);
+
+      // Adjust these thresholds based on your needs
       const needsInitialization =
         vaultBalanceSol < 0.002 || userBalanceSol < 0.001;
-      const needsAta = !ataInfo;
-
-      console.log("Needs SOL initialization:", needsInitialization);
-      console.log("Needs ATA initialization:", needsAta);
+      const needsAta = !ataExists;
 
       if (needsInitialization) {
-        // Initialize both SOL and ATA in one transaction
         console.log(
           "Initializing vault and creating ATA via init-fund-multisig..."
         );
@@ -145,7 +151,7 @@ export function DepositModal({ multisigAddress }: DepositModalProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userWallet: publicKey.toBase58(),
-            multisigPda: multisigAddress,
+            multisigPda: localMultisigPDA,
           }),
         });
 
@@ -162,7 +168,6 @@ export function DepositModal({ multisigAddress }: DepositModalProps) {
         );
         console.log("Vault initialized and ATA created:", signature);
       } else if (needsAta) {
-        // Only initialize ATA if we have sufficient SOL
         console.log("Creating USDC ATA only...");
         const signature = await initializeAta();
         console.log("USDC ATA created:", signature);
@@ -171,19 +176,17 @@ export function DepositModal({ multisigAddress }: DepositModalProps) {
       }
 
       // Verify final state
-      const finalVaultBalance = await connection.getBalance(vaultAddress);
+      const finalVaultBalance = await solanaService.getBalance(vaultAddress);
       console.log(
         "Final vault SOL balance:",
         finalVaultBalance / LAMPORTS_PER_SOL
       );
 
-      try {
-        const ataAccount = await getAccount(connection, usdcAta);
-        console.log("Final ATA state:", ataAccount.address.toBase58());
-      } catch (e) {
-        console.error("Failed to get final ATA state:", e);
-        throw new Error("ATA initialization failed");
-      }
+      const finalAtaState = await solanaService.getAccount(
+        usdcAta,
+        "confirmed"
+      );
+      console.log("Final ATA state:", finalAtaState.address.toBase58());
 
       return true;
     } catch (error) {
@@ -266,7 +269,7 @@ export function DepositModal({ multisigAddress }: DepositModalProps) {
       await checkVaultAndAtaStatus();
 
       console.log("Vault Address:", vaultAddress);
-      const vaultBalance = await connection.getBalance(vaultAddress);
+      const vaultBalance = await solanaService.getBalance(vaultAddress);
       console.log("Vault USDC Balance:", vaultBalance);
 
       await initializeCoinbaseOnramp(amount);
