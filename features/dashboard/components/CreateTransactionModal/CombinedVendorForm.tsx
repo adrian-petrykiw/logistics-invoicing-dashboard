@@ -95,7 +95,7 @@ export function CombinedVendorForm({
   return (
     <Form {...form}>
       <div className="flex flex-col h-full">
-        <div className="flex-1 overflow-y-auto mb-10">
+        <div className="flex-1 overflow-y-auto pb-10 mb-10">
           <form
             id="vendor-form"
             onSubmit={form.handleSubmit(onSubmit)}

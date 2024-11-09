@@ -9,7 +9,6 @@ import { PaymentDetailsForm } from "./PaymentDetailsForm";
 import { Confirmation } from "./Confirmation";
 import { Progress } from "@/components/ui/progress";
 import CombinedVendorForm from "./CombinedVendorForm";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/router";
 import { PaymentDetailsFormValues } from "@/schemas/paymentdetails";
 import { CombinedFormValues } from "@/schemas/combinedform";
@@ -79,6 +78,7 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
           onNext={handlePaymentSubmit}
           onBack={handleBack}
           vendorFormData={vendorFormData!}
+          userWalletAddress={userWalletAddress}
         />
       ),
     },
