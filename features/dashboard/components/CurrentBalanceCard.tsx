@@ -12,6 +12,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { getMultisigPda } from "@sqds/multisig";
 import { DepositModal } from "./DepositModal";
+import { useQueryClient } from "@tanstack/react-query";
 
 function BalanceCard() {
   const { publicKey } = useWallet();
@@ -23,7 +24,11 @@ function BalanceCard() {
   const [multisigPda] = getMultisigPda({
     createKey: createKey,
   });
-  const { data: usdcBalance, isLoading } = useMultisigVaultBalance(multisigPda);
+  const {
+    data: usdcBalance,
+    isLoading,
+    refetch: refetchBalance,
+  } = useMultisigVaultBalance(multisigPda);
 
   const formatUsdcBalance = (balance: number | null | undefined) => {
     if (balance === null || balance === undefined) return "0.00";
@@ -47,24 +52,43 @@ function BalanceCard() {
     ),
     multisigPda,
     usdcBalance,
+    isLoading,
+    refetchBalance,
   };
 }
 
 export function CurrentBalanceCard() {
   const [targetCurrency, setTargetCurrency] =
     useState<SupportedCurrency>("USD");
+  const queryClient = useQueryClient();
   const balanceCard = BalanceCard();
 
   const {
     data: conversion,
-    isLoading,
-    refetch,
-    isRefetching,
+    isLoading: isConversionLoading,
+    refetch: refetchConversion,
+    isRefetching: isConversionRefetching,
   } = useCurrencyConversion(
-    balanceCard.usdcBalance ?? 0, // Use actual USDC balance
+    balanceCard.usdcBalance ?? 0,
     "USDC",
     targetCurrency
   );
+
+  const handleRefresh = async () => {
+    // Invalidate and refetch balance using the new object syntax
+    await queryClient.invalidateQueries({
+      queryKey: ["multisigBalance", balanceCard.multisigPda?.toBase58()],
+    });
+
+    // Refetch balance
+    await balanceCard.refetchBalance();
+
+    // After balance is refreshed, refetch conversion
+    await refetchConversion();
+  };
+
+  const isLoading = balanceCard.isLoading || isConversionLoading;
+  const isRefetching = isConversionRefetching;
 
   return (
     <Card className="p-4 h-auto flex flex-col justify-between items-stretch">
@@ -77,16 +101,16 @@ export function CurrentBalanceCard() {
             variant="ghost"
             size="sm"
             className="p-0 h-6 w-6"
-            onClick={() => refetch()}
-            disabled={isRefetching}
+            onClick={handleRefresh}
+            disabled={isRefetching || balanceCard.isLoading}
           >
             <RefreshCw
               className={cn(
                 "h-4 w-4 text-quaternary hover:text-tertiary transition-all",
-                isRefetching && "animate-spin"
+                (isRefetching || balanceCard.isLoading) && "animate-spin"
               )}
             />
-            <span className="sr-only">Refresh price</span>
+            <span className="sr-only">Refresh balance</span>
           </Button>
         </div>
         <DepositModal />

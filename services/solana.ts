@@ -22,9 +22,8 @@ export class SolanaService {
       throw new Error("SOLANA_RPC_URL environment variable is not set");
     }
 
-    this.connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL, {
+    this.connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL!, {
       commitment: "confirmed",
-      confirmTransactionInitialTimeout: 60000,
     });
   }
 

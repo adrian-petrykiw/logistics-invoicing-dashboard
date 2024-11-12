@@ -12,7 +12,6 @@ export function useMultisigVaultBalance(multisigPda: PublicKey | null) {
     queryFn: async () => {
       if (!multisigPda) return null;
 
-      // Get the vault PDA (using index 0 as default vault)
       const [vaultPda] = multisig.getVaultPda({
         multisigPda,
         index: 0,
@@ -28,5 +27,7 @@ export function useMultisigVaultBalance(multisigPda: PublicKey | null) {
     enabled: !!multisigPda,
     retry: 3,
     retryDelay: 1000,
+    staleTime: 30000, // Consider data stale after 30 seconds
+    refetchOnWindowFocus: true,
   });
 }

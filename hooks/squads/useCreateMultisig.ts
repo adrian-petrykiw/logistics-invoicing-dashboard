@@ -1,9 +1,7 @@
 import { useMutation, UseMutationResult } from "@tanstack/react-query";
-import { Transaction } from "@solana/web3.js";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
+import { useWallet } from "@solana/wallet-adapter-react";
 import toast from "react-hot-toast";
-import { squadsService } from "@/services/squads";
-import { solanaService } from "@/services/solana";
 import { CreateMultisigResult } from "@/features/settings/components/RegistrationModal";
 import {
   CreateMultisigInput,
@@ -16,60 +14,42 @@ export function useCreateMultisig(): UseMutationResult<
   CreateMultisigInput,
   unknown
 > {
-  const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+  const { publicKey } = useWallet();
 
   return useMutation({
     mutationFn: async (input: CreateMultisigInput) => {
       if (!publicKey) throw new Error("Wallet not connected");
       CreateMultisigInputSchema.parse(input);
 
-      const { creator, email, configAuthority } = input;
-      const { createIx, multisigPda, createKey } =
-        await squadsService.createControlledMultisig({
-          creator,
-          email,
-          configAuthority,
-        });
-
-      const createMultisigTx = new Transaction().add(createIx);
-      const createSignature = await sendTransaction(
-        createMultisigTx,
-        connection
-      );
-      await solanaService.confirmTransactionWithRetry(
-        createSignature,
-        "confirmed"
-      );
-
       try {
-        const response = await fetch("/api/init-fund-multisig", {
+        const response = await fetch("/api/create-multisig", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userWallet: publicKey.toBase58(),
-            multisigPda: multisigPda.toBase58(),
+            email: input.email,
           }),
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || "Failed to fund accounts");
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to create multisig");
         }
 
-        const { signature: fundingSignature } = await response.json();
-        console.log("Transaction complete:", {
-          multisigCreation: createSignature,
-          funding: fundingSignature,
-        });
-      } catch (fundingError) {
-        console.error("Funding error:", fundingError);
-        toast.error(
-          "Vendor registered but funding failed. Please contact support."
-        );
-      }
+        const data = await response.json();
+        if (!data.signature || !data.multisigPda || !data.createKey) {
+          throw new Error("Invalid response from server");
+        }
 
-      return { signature: createSignature, multisigPda, createKey };
+        return {
+          signature: data.signature,
+          multisigPda: new PublicKey(data.multisigPda),
+          createKey: new PublicKey(data.createKey),
+        };
+      } catch (error) {
+        console.error("Create multisig error:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       toast.success("Vendor account created");

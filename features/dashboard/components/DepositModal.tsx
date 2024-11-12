@@ -224,7 +224,7 @@ export function DepositModal() {
         setIsSubmitting(false);
       },
       onExit: () => {
-        toast.error("Deposit process was cancelled");
+        console.error("Deposit process was exited");
         setIsSubmitting(false);
       },
       experienceLoggedIn: "popup",

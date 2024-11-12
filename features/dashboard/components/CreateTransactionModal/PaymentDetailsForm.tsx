@@ -129,14 +129,14 @@ export function PaymentDetailsForm({
 
             {selectedMethod === "credit" && (
               <div className="pt-2">
-                <p className="text-sm text-muted-foreground">
+                <div className="text-sm text-muted-foreground">
                   Available credit balance:{" "}
                   {isLoadingCredit ? (
                     <Skeleton className="h-4 w-16 inline-block" />
                   ) : (
                     `$${formatBalance(creditBalance)} USDC`
                   )}
-                </p>
+                </div>
                 {(creditBalance ?? 0) < totalAmount && !isLoadingCredit && (
                   <p className="text-sm text-destructive mt-1 text-red-500 font-medium">
                     Insufficient credit balance for this transaction. Please

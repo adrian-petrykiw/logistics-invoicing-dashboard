@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAvailableVendors } from "@/hooks/useVendorSelection";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import CombinedVendorForm from "./CombinedVendorForm";
 import { useRouter } from "next/router";
 import { PaymentDetailsFormValues } from "@/schemas/paymentdetails";
 import { CombinedFormValues } from "@/schemas/combinedform";
+import { VendorListItem } from "@/types/vendor";
 
 interface CreateTransactionModalProps {
   isOpen: boolean;
@@ -29,6 +31,20 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
     useState<CombinedFormValues | null>(null);
   const [paymentFormData, setPaymentFormData] = useState<any>(null);
   const router = useRouter();
+
+  // Pre-fetch vendors data
+  const {
+    data: vendors = [] as VendorListItem[],
+    refetch: refetchVendors,
+    isLoading,
+  } = useAvailableVendors();
+
+  useEffect(() => {
+    // Refetch vendors when modal opens
+    if (isOpen) {
+      refetchVendors();
+    }
+  }, [isOpen, refetchVendors]);
 
   if (!userWalletAddress) {
     router.push("/");
@@ -68,6 +84,8 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
         <CombinedVendorForm
           userWalletAddress={userWalletAddress}
           onNext={handleVendorSubmit}
+          availableVendors={vendors}
+          isLoading={isLoading}
         />
       ),
     },

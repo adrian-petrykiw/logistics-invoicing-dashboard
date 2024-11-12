@@ -100,14 +100,31 @@ export function withAuth<T>(
     req: NextApiRequest,
     res: NextApiResponse<T | { error: string }>
   ): Promise<void> => {
+    console.log("=== Auth Middleware Start ===");
+    console.log("Incoming headers:", {
+      email: req.headers["x-user-email"],
+      wallet: req.headers["x-wallet-address"],
+      info: req.headers["x-user-info"],
+    });
+
     const user = await getOrCreateUser(req);
 
+    console.log("Auth result:", {
+      hasUser: !!user,
+      userId: user?.id,
+      userEmail: user?.email,
+      userWallet: user?.walletAddress,
+    });
+
     if (!user) {
+      console.log("Auth failed - no user returned");
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
 
     (req as AuthedRequest).user = user;
+
+    console.log("=== Auth Middleware End ===");
     return handler(req as AuthedRequest, res);
   };
 }

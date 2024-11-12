@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { FiPlus } from "react-icons/fi";
 import { initOnRamp, InitOnRampParams } from "@coinbase/cbpay-js";
@@ -49,6 +49,19 @@ interface VendorRegistrationModalProps {
   >;
 }
 
+interface RegistrationFormData {
+  ownerName: string;
+  companyName: string;
+  companyAddress: string;
+  companyPhone: string;
+  companyEmail: string;
+  companyWebsite: string;
+  registrationNumber: string;
+  taxNumber: string;
+  amount: number;
+  partnerUserId: string;
+}
+
 export function VendorRegistrationModal({
   isOpen,
   onOpenChange,
@@ -57,24 +70,48 @@ export function VendorRegistrationModal({
   createMultisig,
   createOrganization,
 }: VendorRegistrationModalProps) {
-  const { publicKey } = useWallet();
+  const { publicKey, connected, wallet, connect } = useWallet();
   const [step, setStep] = useState<"details" | "processing">("details");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formDisabled, setFormDisabled] = useState(false);
+  const [paymentInitiated, setPaymentInitiated] = useState(false);
   const onrampInstance = useRef<any>(null);
   const queryClient = useQueryClient();
   const processingRef = useRef(false);
   const hasExitedRef = useRef(false);
 
+  // Effect to handle wallet reconnection after payment redirect
+  useEffect(() => {
+    let reconnectTimeout: NodeJS.Timeout;
+
+    if (paymentInitiated && !connected && wallet?.adapter.name === "Particle") {
+      reconnectTimeout = setTimeout(async () => {
+        try {
+          await connect();
+        } catch (error) {
+          console.error("Wallet reconnection error:", error);
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [paymentInitiated, connected, wallet, connect]);
+
   const resetState = () => {
     setStep("details");
     setIsSubmitting(false);
     setFormDisabled(false);
+    setPaymentInitiated(false);
     processingRef.current = false;
     hasExitedRef.current = false;
     localStorage.removeItem("vendorRegistrationData");
   };
 
+  // In VendorRegistrationModal.tsx
   const handlePaymentSuccess = async () => {
     if (processingRef.current) return;
     processingRef.current = true;
@@ -84,44 +121,52 @@ export function VendorRegistrationModal({
       console.log("Payment success callback triggered");
       setStep("processing");
 
-      await queryClient.refetchQueries({ queryKey: ["auth"] });
+      // Add delay to ensure state is set
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      const startTime = Date.now();
-      const timeout = 10000;
-      let currentUser: AuthUser | null = null;
-
-      while (Date.now() - startTime < timeout) {
-        const userData = queryClient.getQueryData<AuthUser | null>(["auth"]);
-        if (userData) {
-          currentUser = userData;
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        await queryClient.refetchQueries({ queryKey: ["auth"] });
-      }
-
-      if (!currentUser || !publicKey) {
-        throw new Error("Authentication failed after payment");
-      }
-
-      console.log("Auth verified, proceeding with registration");
-
+      // Get stored data first
       const storedData = localStorage.getItem("vendorRegistrationData");
       if (!storedData) {
         throw new Error("Registration data not found");
       }
-      const formData = JSON.parse(storedData);
+      const formData = JSON.parse(storedData) as RegistrationFormData;
 
-      // Create multisig and organization
-      const { multisigPda } = await createMultisig.mutateAsync({
+      // Wait for wallet connection
+      const maxRetries = 5;
+      let retries = 0;
+
+      while (!connected && retries < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        retries++;
+
+        if (!connected && wallet?.adapter.name === "Particle") {
+          try {
+            await connect();
+          } catch (error) {
+            console.warn("Reconnection attempt failed:", error);
+          }
+        }
+      }
+
+      if (!connected || !publicKey) {
+        throw new Error("Failed to reconnect wallet after payment");
+      }
+
+      // Create multisig immediately after payment
+      const multisigResult = await createMultisig.mutateAsync({
         creator: publicKey,
-        email: currentUser.email,
+        email: formData.companyEmail,
         configAuthority: publicKey,
       });
 
+      if (!multisigResult?.multisigPda) {
+        throw new Error("Failed to create multisig: Invalid result");
+      }
+
+      // Create organization
       const response = await createOrganization.mutateAsync({
         name: formData.companyName,
-        multisig_wallet: multisigPda.toBase58(),
+        multisig_wallet: multisigResult.multisigPda.toBase58(),
         business_details: {
           companyName: formData.companyName,
           companyAddress: formData.companyAddress,
@@ -131,18 +176,14 @@ export function VendorRegistrationModal({
           registrationNumber: formData.registrationNumber,
           taxNumber: formData.taxNumber,
           ownerName: formData.ownerName,
-          ownerEmail: currentUser.email,
+          ownerEmail: formData.companyEmail,
           ownerWalletAddress: publicKey.toBase58(),
         },
       });
 
-      if (!response.success || !response.data) {
-        throw new Error(
-          response.error?.error || "Failed to create organization"
-        );
-      }
-
+      // Success handling
       console.log("Registration completed successfully");
+      setPaymentInitiated(false);
       localStorage.removeItem("vendorRegistrationData");
       onOpenChange(false);
       onSubmitSuccess();
@@ -151,47 +192,54 @@ export function VendorRegistrationModal({
     } catch (error) {
       console.error("Registration error:", error);
       if (!hasExitedRef.current) {
-        toast.error("Failed to complete registration. Please try again.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to complete registration"
+        );
       }
       resetState();
+      setPaymentInitiated(false);
     }
   };
 
   const handleInitialSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!publicKey || !connected) {
+      toast.error("Please ensure your wallet is connected");
+      return;
+    }
+
     setIsSubmitting(true);
     setFormDisabled(true);
 
-    const data = new FormData(e.currentTarget);
-    const amount = parseFloat(data.get("amount") as string);
-    const ownerName = data.get("ownerName") as string;
-    const companyName = data.get("companyName") as string;
-    const companyAddress = data.get("companyAddress") as string;
-    const companyPhone = data.get("companyPhone") as string;
-    const companyEmail = data.get("companyEmail") as string;
-    const companyWebsite = data.get("companyWebsite") as string;
-    const registrationNumber = data.get("registrationNumber") as string;
-    const taxNumber = data.get("taxNumber") as string;
-
-    if (!publicKey) {
-      toast.error("Please connect your wallet first");
-      resetState();
-      return;
-    }
-
-    if (amount < 1 || amount > 500) {
-      toast.error("Amount must be between $1 and $500");
-      resetState();
-      return;
-    }
-
     try {
+      const formData = new FormData(e.currentTarget);
+      const amount = parseFloat(formData.get("amount") as string);
+      const ownerName = formData.get("ownerName") as string;
+      const companyName = formData.get("companyName") as string;
+      const companyAddress = formData.get("companyAddress") as string;
+      const companyPhone = formData.get("companyPhone") as string;
+      const companyEmail = formData.get("companyEmail") as string;
+      const companyWebsite = formData.get("companyWebsite") as string;
+      const registrationNumber = formData.get("registrationNumber") as string;
+      const taxNumber = formData.get("taxNumber") as string;
+
+      if (!publicKey) {
+        throw new Error("Please connect your wallet first");
+      }
+
+      if (amount < 1 || amount > 500) {
+        throw new Error("Amount must be between $1 and $500");
+      }
+
       const basePublicKey = publicKey.toBase58();
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const shortPublicKey = basePublicKey.substring(0, 20);
       const partnerUserId = `${shortPublicKey}_${timestamp}`;
 
-      const registrationData = {
+      const registrationData: RegistrationFormData = {
         ownerName,
         companyName,
         companyAddress,
@@ -203,10 +251,13 @@ export function VendorRegistrationModal({
         amount,
         partnerUserId,
       };
+
       localStorage.setItem(
         "vendorRegistrationData",
         JSON.stringify(registrationData)
       );
+      setPaymentInitiated(true);
+
       const options: InitOnRampParams = {
         appId: process.env.NEXT_PUBLIC_COINBASE_APP_ID!,
         widgetParameters: {
@@ -227,6 +278,7 @@ export function VendorRegistrationModal({
         onExit: () => {
           if (!processingRef.current) {
             hasExitedRef.current = true;
+            setPaymentInitiated(false);
             toast.error("Payment process was cancelled");
             resetState();
           }
@@ -243,14 +295,16 @@ export function VendorRegistrationModal({
           onrampInstance.current.open();
         } else {
           console.error("Failed to initialize Coinbase OnRamp:", error);
-          toast.error("Failed to initialize payment");
-          resetState();
+          throw new Error("Failed to initialize payment");
         }
       });
     } catch (error) {
       console.error("Payment initialization error:", error);
-      toast.error("Failed to initialize payment");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to initialize payment"
+      );
       resetState();
+      setPaymentInitiated(false);
     }
   };
 
@@ -270,18 +324,9 @@ export function VendorRegistrationModal({
         </Button>
       </DialogTrigger>
 
-      <DialogContent
-        className="max-w-2xl max-h-[90vh] overflow-y-auto"
-        aria-describedby="registration-form-description"
-      >
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Register Vendor</DialogTitle>
-          {/* <p
-            id="registration-form-description"
-            className="text-sm text-muted-foreground"
-          >
-            Fill out the form below to register your organization.
-          </p> */}
         </DialogHeader>
 
         {step === "details" && (

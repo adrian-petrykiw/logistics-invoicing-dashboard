@@ -8,6 +8,7 @@ import { clusterApiUrl } from "@solana/web3.js";
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import { ParticleAdapter } from "@solana/wallet-adapter-wallets";
 import "@solana/wallet-adapter-react-ui/styles.css";
+import toast from "react-hot-toast";
 
 const WalletProviderComponent: FC<PropsWithChildren> = ({ children }) => {
   const network = WalletAdapterNetwork.Devnet;
@@ -46,7 +47,14 @@ const WalletProviderComponent: FC<PropsWithChildren> = ({ children }) => {
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider
+        autoConnect={true}
+        wallets={wallets}
+        onError={(error) => {
+          console.error("Wallet error:", error);
+          toast.error("Wallet error: Please try reconnecting");
+        }}
+      >
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>
