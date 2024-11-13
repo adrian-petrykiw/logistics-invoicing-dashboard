@@ -58,5 +58,7 @@ export interface CombinedVendorFormProps {
   onNext: (data: CombinedFormValues) => void;
   userWalletAddress: string;
   availableVendors: VendorListItem[];
-  isLoading?: boolean;
+  isVendorsLoading: boolean;
+  vendorsError: Error | null;
+  refetchVendors: () => void;
 }

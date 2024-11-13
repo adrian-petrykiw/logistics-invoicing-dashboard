@@ -35,9 +35,10 @@ function MyApp({ Component, pageProps }: AppProps) {
         defaultOptions: {
           queries: {
             staleTime: 60 * 1000,
-            retry: 1,
-            refetchOnWindowFocus: false,
-            refetchOnMount: false,
+            retry: 3,
+            retryDelay: 1000,
+            refetchOnWindowFocus: true,
+            refetchOnMount: true,
           },
         },
       })
@@ -58,8 +59,8 @@ function MyApp({ Component, pageProps }: AppProps) {
       client={queryClient}
       dehydratedState={pageProps.dehydratedState}
     >
-      <AuthProvider>
-        <DynamicWalletProvider>
+      <DynamicWalletProvider>
+        <AuthProvider>
           {isLandingPage ? (
             <Component {...pageProps} />
           ) : (
@@ -74,8 +75,8 @@ function MyApp({ Component, pageProps }: AppProps) {
               duration: 4000,
             }}
           />
-        </DynamicWalletProvider>
-      </AuthProvider>
+        </AuthProvider>
+      </DynamicWalletProvider>
     </ReactQueryProvider>
   );
 }

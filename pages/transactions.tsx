@@ -13,31 +13,55 @@ import {
 } from "@/components/ui/table";
 import { useTransactions } from "@/features/transactions/hooks/useTransactions";
 import { Layout } from "@/components/Layout";
+import { useAuthContext } from "@/components/providers/AuthProvider";
 
 export default function TransactionsPage() {
   const router = useRouter();
-  const { connected } = useWallet();
-  // const { transactions, isLoading } = useTransactions();
+  const { connected, publicKey } = useWallet();
+  const { user, isAuthenticated, isLoading } = useAuthContext();
 
-  // useEffect(() => {
-  //   const checkAuth = async () => {
-  //     if (!connected) {
-  //       console.log("Not connected, redirecting to home");
-  //       await router.push("/");
-  //     }
-  //   };
+  console.log("Dashboard state:", {
+    connected,
+    publicKey: publicKey?.toString(),
+    user,
+    isLoading,
+    isAuthenticated,
+    wallet: window?.particle?.auth?.getUserInfo(),
+  });
 
-  //   checkAuth();
-  // }, [connected, router]);
+  useEffect(() => {
+    const checkAuth = async () => {
+      if (!isLoading && !isAuthenticated) {
+        console.log("Redirecting to home - not authenticated");
+        router.push("/");
+      }
+    };
+    checkAuth();
+  }, [isAuthenticated, isLoading, router]);
 
-  // if (!connected || isLoading) {
-  // if (isLoading) {
-  //   return (
-  //     <div className="min-h-screen bg-secondary flex items-center justify-center">
-  //       <div className="text-tertiary">Loading...</div>
-  //     </div>
-  //   );
-  // }
+  if (isLoading || !connected) {
+    return (
+      <div className="min-h-screen bg-primary flex items-center justify-center">
+        <div className="text-tertiary">Loading...</div>
+      </div>
+    );
+  }
+
+  // Check auth status
+  if (!isAuthenticated || !user?.walletAddress) {
+    console.log("Not authenticated, wallet state:", {
+      isAuthenticated,
+      user,
+      connected,
+    });
+    // Don't redirect here, let the useEffect handle it
+    return (
+      <div className="min-h-screen bg-primary flex items-center justify-center">
+        <div className="text-tertiary">Authenticating...</div>
+      </div>
+    );
+  }
+  const { walletAddress, email } = user;
 
   return (
     <main className="container mx-auto py-8">

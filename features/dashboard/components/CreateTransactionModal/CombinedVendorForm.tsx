@@ -49,7 +49,9 @@ const CombinedVendorForm = ({
   onNext,
   userWalletAddress,
   availableVendors,
-  isLoading: isVendorsLoading = false,
+  isVendorsLoading,
+  vendorsError,
+  refetchVendors,
 }: CombinedVendorFormProps) => {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -128,18 +130,15 @@ const CombinedVendorForm = ({
     );
   }
 
-  // Show error state if vendors fail to load
-  if (!isVendorsLoading && !availableVendors?.length) {
+  if (!isVendorsLoading && vendorsError) {
     return (
       <div className="flex flex-col items-center justify-center p-6 text-center">
-        <p className="text-red-500 mb-4">Failed to load vendors</p>
-        <Button
-          onClick={() => {
-            refetch();
-            // window.location.reload()
-          }}
-          variant="outline"
-        >
+        <p className="text-red-500 mb-4">
+          {vendorsError instanceof Error
+            ? vendorsError.message
+            : "Failed to load vendors"}
+        </p>
+        <Button onClick={() => refetchVendors()} variant="outline">
           Retry
         </Button>
       </div>

@@ -19,6 +19,7 @@ async function handler(
   }
 
   if (!req.user?.id) {
+    console.error("No user ID in request");
     return res.status(401).json({
       success: false,
       error: {
@@ -29,13 +30,16 @@ async function handler(
   }
 
   try {
+    console.log("Fetching organizations for user:", req.user.id);
+
     // Get filtered organizations
     const { data: orgs, error: orgsError } = await supabaseAdmin
       .from("organizations")
       .select(
         `
         id,
-        business_details
+        business_details,
+        created_by
       `
       )
       .neq("created_by", req.user.id)
@@ -45,6 +49,8 @@ async function handler(
       console.error("Database error:", orgsError);
       throw orgsError;
     }
+
+    console.log("Found organizations:", orgs?.length || 0);
 
     if (!orgs) {
       return res.status(200).json({
@@ -74,5 +80,4 @@ async function handler(
     });
   }
 }
-
 export default withAuth(handler);

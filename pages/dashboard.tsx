@@ -11,29 +11,61 @@ import {
   YieldPeriod,
   YieldPeriodSelect,
 } from "@/features/dashboard/components/YieldPeriodSelect";
+import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/components/providers/AuthProvider";
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const { connected, publicKey } = useWallet();
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [yieldPeriod, setYieldPeriod] = useState<YieldPeriod>("ytd");
   //   const { multisig, isLoading } = useSquadsWallet();
+  const router = useRouter();
+  const { connected, publicKey } = useWallet();
+  const { user, isAuthenticated, isLoading } = useAuthContext();
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // Protect dashboard route
+  console.log("Dashboard state:", {
+    connected,
+    publicKey: publicKey?.toString(),
+    user,
+    isLoading,
+    isAuthenticated,
+    wallet: window?.particle?.auth?.getUserInfo(),
+  });
+
+  // Modified navigation logic
   useEffect(() => {
-    if (!connected) {
-      router.push("/");
-    }
-  }, [connected, router]);
+    const checkAuth = async () => {
+      if (!isLoading && !isAuthenticated) {
+        console.log("Redirecting to home - not authenticated");
+        router.push("/");
+      }
+    };
+    checkAuth();
+  }, [isAuthenticated, isLoading, router]);
 
-  //   if (!connected || isLoading) {
-  if (!connected) {
+  // Show loading while we're checking auth status
+  if (isLoading || !connected) {
     return (
       <div className="min-h-screen bg-primary flex items-center justify-center">
         <div className="text-tertiary">Loading...</div>
       </div>
     );
   }
+
+  // Check auth status
+  if (!isAuthenticated || !user?.walletAddress) {
+    console.log("Not authenticated, wallet state:", {
+      isAuthenticated,
+      user,
+      connected,
+    });
+    // Don't redirect here, let the useEffect handle it
+    return (
+      <div className="min-h-screen bg-primary flex items-center justify-center">
+        <div className="text-tertiary">Authenticating...</div>
+      </div>
+    );
+  }
+  const { walletAddress, email } = user;
 
   return (
     <main className="container mx-auto py-8 ">
@@ -93,7 +125,8 @@ export default function DashboardPage() {
       <CreateTransactionModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        userWalletAddress={publicKey?.toString() || ""} // Pass wallet address
+        userWalletAddress={walletAddress}
+        userEmail={email}
       />
     </main>
   );

@@ -1,6 +1,6 @@
 // hooks/useVendorDetails.ts
 import { useApi } from "@/hooks/useApi";
-import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useQuery } from "@tanstack/react-query";
 import { PublicKey } from "@solana/web3.js";
 import { getMultisigPda, getVaultPda } from "@sqds/multisig";

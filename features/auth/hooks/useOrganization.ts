@@ -1,7 +1,7 @@
 // hooks/useOrganization.ts
 import { useApi } from "@/hooks/useApi";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "./useAuth";
+import { useAuth } from "../../../hooks/useAuth";
 import {
   CreateOrganizationInput,
   OrganizationResponse,

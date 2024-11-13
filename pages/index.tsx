@@ -4,6 +4,7 @@ import { FiLock, FiDollarSign, FiZap } from "react-icons/fi";
 import { useWallet } from "@solana/wallet-adapter-react";
 import dynamic from "next/dynamic";
 import { Card } from "@/components/ui/card";
+import { useAuthContext } from "@/components/providers/AuthProvider";
 
 export const WalletButton = dynamic(
   async () =>
@@ -20,13 +21,10 @@ export const ParticleAuthButton = dynamic(
 export default function LandingPage() {
   const [isSignupOpen, setIsSignupOpen] = useState(false);
   const { connected } = useWallet();
+  const { isLoading } = useAuthContext();
   const router = useRouter();
 
-  const handleGetStarted = () => {
-    if (connected) {
-      setIsSignupOpen(true);
-    }
-  };
+  console.log("Landing page state:", { connected, isLoading });
 
   return (
     <div className="min-h-screen bg-primary">

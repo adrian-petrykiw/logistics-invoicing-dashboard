@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "react-hot-toast";
 import { PublicKey } from "@solana/web3.js";
 import { UseMutationResult, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { AuthUser } from "@/types/auth";
 import {
   CreateOrganizationInput,

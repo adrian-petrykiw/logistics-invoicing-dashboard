@@ -18,7 +18,7 @@ import { Check, Loader2 } from "lucide-react";
 import { TransactionService } from "@/services/transactionservice";
 import { useVendorDetails } from "../../hooks/useVendorDetails";
 import { getApiUser } from "@/utils/user";
-import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import { getAuthHeaders } from "@/hooks/useApi";
 import { createUsdcTransferTransaction } from "@/services/createAndExecuteUsdcTransfer";

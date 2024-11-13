@@ -1,3 +1,4 @@
+// pages/api/auth/check-invites.ts
 import { NextApiResponse } from "next";
 import { AuthedRequest, withAuth } from "../_lib/auth";
 import { supabaseAdmin } from "../_lib/supabase";
@@ -6,6 +7,7 @@ type ApiResponse =
   | {
       invitesActivated: boolean;
       activatedCount: number;
+      isOwner?: boolean;
     }
   | {
       error: string;
@@ -24,6 +26,25 @@ async function handler(
   const { email, walletAddress } = req.body;
 
   try {
+    const { data: ownerCheck, error: ownerError } = await supabaseAdmin
+      .from("organization_members")
+      .select("role")
+      .eq("email", email)
+      .eq("role", "owner")
+      .single();
+
+    if (ownerError && ownerError.code !== "PGRST116") {
+      throw ownerError;
+    }
+
+    if (ownerCheck?.role === "owner") {
+      return res.status(200).json({
+        invitesActivated: false,
+        activatedCount: 0,
+        isOwner: true,
+      });
+    }
+
     const { data: updatedMembers, error: updateError } = await supabaseAdmin
       .from("organization_members")
       .update({
@@ -40,6 +61,7 @@ async function handler(
     res.status(200).json({
       invitesActivated: updatedMembers && updatedMembers.length > 0,
       activatedCount: updatedMembers?.length || 0,
+      isOwner: false,
     });
     return;
   } catch (error) {

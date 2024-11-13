@@ -19,12 +19,14 @@ interface CreateTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   userWalletAddress: string;
+  userEmail: string;
 }
 
 export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
   isOpen,
   onClose,
   userWalletAddress,
+  userEmail,
 }) => {
   const [step, setStep] = useState(0);
   const [vendorFormData, setVendorFormData] =
@@ -32,11 +34,11 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
   const [paymentFormData, setPaymentFormData] = useState<any>(null);
   const router = useRouter();
 
-  // Pre-fetch vendors data
   const {
-    data: vendors = [] as VendorListItem[],
+    data: vendors = [],
+    isLoading: isVendorsLoading,
+    error: vendorsError,
     refetch: refetchVendors,
-    isLoading,
   } = useAvailableVendors();
 
   useEffect(() => {
@@ -85,7 +87,9 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
           userWalletAddress={userWalletAddress}
           onNext={handleVendorSubmit}
           availableVendors={vendors}
-          isLoading={isLoading}
+          isVendorsLoading={isVendorsLoading}
+          vendorsError={vendorsError instanceof Error ? vendorsError : null}
+          refetchVendors={refetchVendors}
         />
       ),
     },

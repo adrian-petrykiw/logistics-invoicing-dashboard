@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { VendorDetails, ApiResponse, VendorListItem } from "@/types/vendor";
-import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import { getApiUser } from "@/utils/user";
 
@@ -43,6 +43,7 @@ export function useAvailableVendors() {
         );
 
         if (!response.success || !response.data) {
+          console.error("Vendor fetch error:", response.error);
           throw new Error(response.error?.error || "Failed to fetch vendors");
         }
 
@@ -52,9 +53,9 @@ export function useAvailableVendors() {
         throw error;
       }
     },
-    enabled: !authLoading && !!apiUser?.walletAddress,
-    // retry: 3,
-    // retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
-    // initialData: [] as VendorListItem[], // Add this line
+    enabled: !authLoading && !!apiUser?.walletAddress && !!apiUser?.email,
+    staleTime: 30000, // Add caching for 30 seconds
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 }
