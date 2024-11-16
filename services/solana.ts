@@ -6,6 +6,10 @@ import {
   TransactionConfirmationStrategy,
   PublicKey,
   Commitment,
+  SignatureStatus,
+  VersionedTransaction,
+  Signer,
+  Transaction,
 } from "@solana/web3.js";
 import {
   getAccount,
@@ -15,16 +19,18 @@ import {
 
 export class SolanaService {
   private static instance: SolanaService;
-  private connection: Connection;
+  private defaultConnection: Connection;
 
   constructor() {
     if (!process.env.NEXT_PUBLIC_SOLANA_RPC_URL) {
       throw new Error("SOLANA_RPC_URL environment variable is not set");
     }
-
-    this.connection = new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL!, {
-      commitment: "confirmed",
-    });
+    this.defaultConnection = new Connection(
+      process.env.NEXT_PUBLIC_SOLANA_RPC_URL!,
+      {
+        commitment: "confirmed",
+      }
+    );
   }
 
   public static getInstance(): SolanaService {
@@ -35,128 +41,255 @@ export class SolanaService {
   }
 
   public getConnection(): Connection {
-    return this.connection;
+    return this.defaultConnection;
   }
 
-  // Your existing confirmTransaction method
-  async confirmTransaction(
-    signature: TransactionSignature,
-    commitment: Commitment = "confirmed"
-  ): Promise<RpcResponseAndContext<SignatureResult>> {
-    const latestBlockhash = await this.connection.getLatestBlockhash();
-
-    const strategy: TransactionConfirmationStrategy = {
-      signature,
-      blockhash: latestBlockhash.blockhash,
-      lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
-    };
-
-    try {
-      const confirmation = await this.connection.confirmTransaction(
-        strategy,
-        commitment
-      );
-
-      if (confirmation.value.err) {
-        throw new Error(
-          `Transaction failed: ${JSON.stringify(confirmation.value.err)}`
-        );
-      }
-
-      return confirmation;
-    } catch (error) {
-      console.error("Transaction confirmation failed:", error);
-      throw new Error(
-        `Transaction confirmation failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-    }
-  }
-
-  // Your existing confirmTransactionWithRetry method
   async confirmTransactionWithRetry(
     signature: TransactionSignature,
     commitment: Commitment = "confirmed",
-    maxRetries: number = 3,
-    initialRetryDelay: number = 1000
-  ): Promise<RpcResponseAndContext<SignatureResult>> {
+    maxRetries: number = 5,
+    timeoutMs: number = 30000,
+    connection?: Connection
+  ): Promise<SignatureStatus | null> {
+    const conn = connection || this.defaultConnection;
+    const startTime = Date.now();
     let retryCount = 0;
-    let lastError: Error | null = null;
 
-    while (retryCount < maxRetries) {
+    while (retryCount < maxRetries && Date.now() - startTime < timeoutMs) {
       try {
-        const confirmation = await this.confirmTransaction(
-          signature,
-          commitment
-        );
-        return confirmation;
+        console.log(`Confirmation attempt ${retryCount + 1} for ${signature}`);
+
+        const response = await conn.getSignatureStatuses([signature]);
+        const status = response.value[0];
+
+        if (status) {
+          if (status.err) {
+            throw new Error(
+              `Transaction failed: ${JSON.stringify(status.err)}`
+            );
+          }
+
+          if (commitment === "confirmed" && status.confirmations) {
+            console.log(
+              `Transaction confirmed with ${status.confirmations} confirmations`
+            );
+            return status;
+          }
+
+          if (
+            commitment === "finalized" &&
+            status.confirmationStatus === "finalized"
+          ) {
+            console.log("Transaction finalized");
+            return status;
+          }
+        }
+
+        console.log("Waiting before next confirmation check...");
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        retryCount++;
       } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
+        console.error(`Confirmation attempt ${retryCount + 1} failed:`, error);
         retryCount++;
 
         if (retryCount < maxRetries) {
-          // Exponential backoff
-          const delay = initialRetryDelay * Math.pow(2, retryCount - 1);
+          const delay = 1000 * Math.pow(2, retryCount - 1);
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
-    throw lastError || new Error("Failed to confirm transaction after retries");
+    throw new Error(
+      `Failed to confirm transaction after ${maxRetries} attempts or ${timeoutMs}ms timeout`
+    );
   }
 
-  async getAccount(
+  async sendAndConfirmTransaction(
+    transaction: Transaction | VersionedTransaction,
+    signers: Array<Signer>,
+    connection: Connection = this.defaultConnection,
+    options: {
+      commitment?: Commitment;
+      maxRetries?: number;
+      skipPreflight?: boolean;
+      preflightCommitment?: Commitment;
+      timeout?: number;
+    } = {}
+  ): Promise<{ signature: string; status: SignatureStatus | null }> {
+    const {
+      commitment = "confirmed",
+      maxRetries = 5,
+      skipPreflight = true,
+      preflightCommitment = "processed",
+      timeout = 30000,
+    } = options;
+
+    let signature: string;
+
+    if (transaction instanceof VersionedTransaction) {
+      if (!transaction.signatures.length) {
+        transaction.sign(signers);
+      }
+      signature = await connection.sendTransaction(transaction, {
+        maxRetries,
+        skipPreflight,
+        preflightCommitment,
+      });
+    } else {
+      signature = await connection.sendTransaction(transaction, signers, {
+        maxRetries,
+        skipPreflight,
+        preflightCommitment,
+      });
+    }
+
+    console.log("Transaction sent with signature:", signature);
+
+    const status = await this.confirmTransactionWithRetry(
+      signature,
+      commitment,
+      maxRetries,
+      timeout,
+      connection
+    );
+
+    return { signature, status };
+  }
+
+  async sendAndConfirmEncodedTransaction(
+    rawTransaction: string | Buffer,
+    connection: Connection = this.defaultConnection,
+    options: {
+      commitment?: Commitment;
+      maxRetries?: number;
+      skipPreflight?: boolean;
+      preflightCommitment?: Commitment;
+      timeout?: number;
+    } = {}
+  ): Promise<{ signature: string; status: SignatureStatus | null }> {
+    const {
+      commitment = "confirmed",
+      maxRetries = 5,
+      skipPreflight = true,
+      preflightCommitment = "processed",
+      timeout = 30000,
+    } = options;
+
+    const encodedTx =
+      typeof rawTransaction === "string"
+        ? rawTransaction
+        : rawTransaction.toString("base64");
+
+    const signature = await connection.sendEncodedTransaction(encodedTx, {
+      maxRetries,
+      skipPreflight,
+      preflightCommitment,
+    });
+
+    console.log("Encoded transaction sent with signature:", signature);
+
+    const status = await this.confirmTransactionWithRetry(
+      signature,
+      commitment,
+      maxRetries,
+      timeout,
+      connection
+    );
+
+    return { signature, status };
+  }
+
+  async sendAndConfirmRawTransaction(
+    rawTransaction: Buffer,
+    connection: Connection = this.defaultConnection,
+    options: {
+      commitment?: Commitment;
+      maxRetries?: number;
+      skipPreflight?: boolean;
+      preflightCommitment?: Commitment;
+      timeout?: number;
+    } = {}
+  ): Promise<{ signature: string; status: SignatureStatus | null }> {
+    const {
+      commitment = "confirmed",
+      maxRetries = 5,
+      skipPreflight = true,
+      preflightCommitment = "processed",
+      timeout = 30000,
+    } = options;
+
+    const signature = await connection.sendRawTransaction(rawTransaction, {
+      maxRetries,
+      skipPreflight,
+      preflightCommitment,
+    });
+
+    console.log("Raw transaction sent with signature:", signature);
+
+    const status = await this.confirmTransactionWithRetry(
+      signature,
+      commitment,
+      maxRetries,
+      timeout,
+      connection
+    );
+
+    return { signature, status };
+  }
+
+  async getSolanaAccount(
     address: string | PublicKey,
     commitment: Commitment = "confirmed",
     maxRetries = 3
-  ): Promise<Account> {
+  ): Promise<Account | null> {
     const publicKey =
       typeof address === "string" ? new PublicKey(address) : address;
-    let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        console.log(
-          `Attempt ${
-            attempt + 1
-          }: Getting token account ${publicKey.toBase58()}`
-        );
+    // Single attempt without retries for TokenAccountNotFoundError
+    try {
+      console.log(`Getting token account ${publicKey.toBase58()}`);
+      const tokenAccount = await getAccount(
+        this.defaultConnection,
+        publicKey,
+        commitment
+      );
+      console.log(
+        "Successfully retrieved token account:",
+        tokenAccount.address.toBase58()
+      );
+      return tokenAccount;
+    } catch (error) {
+      if (error instanceof TokenAccountNotFoundError) {
+        console.log("Token account not found for", publicKey.toBase58());
+        return null;
+      }
 
-        const tokenAccount = await getAccount(
-          this.connection,
-          publicKey,
-          commitment
-        );
-
-        console.log(
-          "Successfully retrieved token account:",
-          tokenAccount.address.toBase58()
-        );
-        return tokenAccount;
-      } catch (error) {
-        console.error(`Attempt ${attempt + 1} failed:`, error);
-        lastError = error instanceof Error ? error : new Error(String(error));
-
-        // If it's a TokenAccountNotFoundError, don't retry
-        if (error instanceof TokenAccountNotFoundError) {
-          throw error;
-        }
-
-        // If we haven't reached max retries yet, wait before trying again
-        if (attempt < maxRetries - 1) {
-          const delay = 1000 * Math.pow(2, attempt); // Exponential backoff
-          console.log(`Waiting ${delay}ms before retry...`);
-          await new Promise((resolve) => setTimeout(resolve, delay));
+      // For other errors, try retries
+      let lastError = error;
+      for (let attempt = 1; attempt < maxRetries; attempt++) {
+        try {
+          console.log(`Retry attempt ${attempt} for token account`);
+          const tokenAccount = await getAccount(
+            this.defaultConnection,
+            publicKey,
+            commitment
+          );
+          console.log("Successfully retrieved token account on retry");
+          return tokenAccount;
+        } catch (retryError) {
+          if (retryError instanceof TokenAccountNotFoundError) {
+            return null;
+          }
+          console.error(`Retry ${attempt} failed:`, retryError);
+          lastError = retryError;
+          if (attempt < maxRetries - 1) {
+            const delay = 1000 * Math.pow(2, attempt - 1);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
         }
       }
+      throw lastError;
     }
-
-    // If we've exhausted all retries, throw the last error
-    throw (
-      lastError ||
-      new Error(`Failed to get token account after ${maxRetries} attempts`)
-    );
   }
 
   async getAccountInfo(
@@ -173,7 +306,7 @@ export class SolanaService {
         console.log(
           `Attempt ${i + 1} to get account info for ${publicKey.toBase58()}`
         );
-        const accountInfo = await this.connection.getAccountInfo(
+        const accountInfo = await this.defaultConnection.getAccountInfo(
           publicKey,
           commitment
         );
@@ -210,7 +343,7 @@ export class SolanaService {
     const publicKey =
       typeof address === "string" ? new PublicKey(address) : address;
     try {
-      return await this.connection.getBalance(publicKey, commitment);
+      return await this.defaultConnection.getBalance(publicKey, commitment);
     } catch (error) {
       console.error("Error fetching balance:", error);
       throw error;

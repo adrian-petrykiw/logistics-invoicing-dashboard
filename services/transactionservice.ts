@@ -19,11 +19,7 @@ import { getApiUser } from "@/utils/user";
 import { solanaService } from "./solana";
 import { createCipheriv, createHash, randomBytes } from "crypto";
 import bs58 from "bs58";
-
-const MEMO_PROGRAM_ID = new PublicKey(
-  "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
-);
-const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
+import { MEMO_PROGRAM_ID, USDC_MINT } from "@/utils/constants";
 
 interface BusinessData {
   vendor: string;
@@ -303,7 +299,7 @@ export class TransactionService {
         throw new Error(`Multisig account verification failed: ${err.message}`);
       }
 
-      // Generate proof and create instructions (your existing code)
+      // Generate proof and create instructions
       const { proofJson, encryptionKey } = this.generateProof(
         businessData,
         invoices
@@ -346,16 +342,6 @@ export class TransactionService {
         "confirmed"
       );
 
-      // console.log("Transaction message size:",
-      //   Buffer.from(message).length,
-      //   "bytes"
-      // );
-
-      // // Validate the message size before creating transaction
-      // if (Buffer.from(message).length > 1232) { // Solana's max transaction size
-      //   throw new Error("Transaction message too large - exceeds maximum size");
-      // }
-
       // Create the vault transaction
       console.log("Creating vault transaction...");
       const txCreateSignature = await multisig.rpc.vaultTransactionCreate({
@@ -370,7 +356,21 @@ export class TransactionService {
         memo: proofJson,
       });
 
-      await solanaService.confirmTransactionWithRetry(txCreateSignature);
+      // Use new confirmation method
+      const createStatus = await solanaService.confirmTransactionWithRetry(
+        txCreateSignature,
+        "confirmed",
+        5,
+        30000,
+        localConnection
+      );
+
+      if (createStatus?.err) {
+        throw new Error(
+          `Failed to create vault transaction: ${createStatus.err}`
+        );
+      }
+
       console.log("Created vault transaction:", txCreateSignature);
 
       // Since this is a controlled multisig, we can execute right away
@@ -384,10 +384,30 @@ export class TransactionService {
         sendOptions: { skipPreflight: true },
       });
 
-      await solanaService.confirmTransactionWithRetry(txExecuteSignature);
+      // Use new confirmation method for execution
+      const executeStatus = await solanaService.confirmTransactionWithRetry(
+        txExecuteSignature,
+        "confirmed",
+        5,
+        30000,
+        connection
+      );
+
+      if (executeStatus?.err) {
+        throw new Error(
+          `Failed to execute vault transaction: ${executeStatus.err}`
+        );
+      }
+
       console.log("Executed vault transaction:", txExecuteSignature);
 
-      // Rest of your code for storing transaction record...
+      return {
+        createSignature: txCreateSignature,
+        executeSignature: txExecuteSignature,
+        proofJson,
+        encryptionKey,
+        status: executeStatus,
+      };
     } catch (err: unknown) {
       const error = err as Error;
       console.error("Transaction error:", {

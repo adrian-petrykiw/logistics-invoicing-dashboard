@@ -1,58 +1,67 @@
-// hooks/useOrganization.ts
-import { useApi } from "@/hooks/useApi";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "../../../hooks/useAuth";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import {
   CreateOrganizationInput,
   OrganizationResponse,
   ApiResponse,
 } from "@/schemas/organization";
+import { useAuth } from "@/hooks/useAuth";
 
 export const useOrganization = (userId: string) => {
   const { user, isLoading: authLoading } = useAuth();
-  const api = useApi(user || null);
   const queryClient = useQueryClient();
 
-  const { data: response, isLoading } = useQuery({
+  const {
+    data: response,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["organizations", userId],
     queryFn: async () => {
       console.log("Fetching organizations for user:", userId);
       const response = await api.get<ApiResponse<OrganizationResponse[]>>(
-        "/organizations"
+        "/organizations",
+        {
+          headers: user
+            ? {
+                "x-user-email": user.email,
+                "x-wallet-address": user.walletAddress,
+                "x-user-info": JSON.stringify(user.userInfo),
+              }
+            : {},
+        }
       );
-      console.log("Organizations response:", response);
-      return response;
+      return response.data;
     },
     enabled: !!userId && !!user && !authLoading,
   });
 
-  // Extract organizations from the API response
-  const organizations = response?.success ? response.data : [];
-
   const createOrganization = useMutation({
     mutationFn: async (newOrg: CreateOrganizationInput) => {
       if (!user) throw new Error("User must be authenticated");
-      console.log("Creating organization:", newOrg);
       const response = await api.post<ApiResponse<OrganizationResponse>>(
         "/organizations",
-        newOrg
+        newOrg,
+        {
+          headers: {
+            "x-user-email": user.email,
+            "x-wallet-address": user.walletAddress,
+            "x-user-info": JSON.stringify(user.userInfo),
+          },
+        }
       );
-      console.log("Creation response:", response);
-      return response;
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["organizations"] });
     },
-    onError: (error) => {
-      console.error("Organization creation error:", error);
-      throw error;
-    },
   });
 
   return {
-    organization: organizations?.[0],
-    organizations,
+    organization: response?.success ? response.data?.[0] : undefined,
+    organizations: response?.success ? response.data : [],
     isLoading: isLoading || authLoading,
+    error,
     createOrganization,
   };
 };

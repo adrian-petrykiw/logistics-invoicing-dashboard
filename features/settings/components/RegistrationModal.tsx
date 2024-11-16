@@ -23,6 +23,7 @@ import {
   ApiResponse,
 } from "@/schemas/organization";
 import { CreateMultisigInput } from "@/schemas/squads";
+import { getMultisigPda } from "@sqds/multisig";
 
 export interface CreateMultisigResult {
   signature: string;
@@ -76,7 +77,6 @@ export function VendorRegistrationModal({
   const [formDisabled, setFormDisabled] = useState(false);
   const [paymentInitiated, setPaymentInitiated] = useState(false);
   const onrampInstance = useRef<any>(null);
-  const queryClient = useQueryClient();
   const processingRef = useRef(false);
   const hasExitedRef = useRef(false);
 
@@ -111,7 +111,6 @@ export function VendorRegistrationModal({
     localStorage.removeItem("vendorRegistrationData");
   };
 
-  // In VendorRegistrationModal.tsx
   const handlePaymentSuccess = async () => {
     if (processingRef.current) return;
     processingRef.current = true;
@@ -121,46 +120,45 @@ export function VendorRegistrationModal({
       console.log("Payment success callback triggered");
       setStep("processing");
 
-      // Add delay to ensure state is set
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Get stored data first
       const storedData = localStorage.getItem("vendorRegistrationData");
       if (!storedData) {
         throw new Error("Registration data not found");
       }
       const formData = JSON.parse(storedData) as RegistrationFormData;
 
-      // Wait for wallet connection
-      const maxRetries = 5;
-      let retries = 0;
+      if (!connected || !publicKey) {
+        throw new Error("Wallet not connected");
+      }
 
-      while (!connected && retries < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        retries++;
+      let multisigResult;
+      try {
+        multisigResult = await createMultisig.mutateAsync({
+          creator: publicKey,
+          email: formData.companyEmail,
+          configAuthority: publicKey,
+        });
+      } catch (error: any) {
+        // If error indicates multisig exists, try to get its address
+        if (error.message?.includes("already in use")) {
+          // const createKey = PublicKey.findProgramAddressSync(
+          //   [Buffer.from("squad"), publicKey.toBuffer()],
+          //   new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
+          // )[0];
+          const createKey = publicKey;
+          const [multisigPda] = getMultisigPda({ createKey });
 
-        if (!connected && wallet?.adapter.name === "Particle") {
-          try {
-            await connect();
-          } catch (error) {
-            console.warn("Reconnection attempt failed:", error);
-          }
+          multisigResult = {
+            signature: "existing",
+            multisigPda,
+            createKey,
+          };
+        } else {
+          throw error;
         }
       }
 
-      if (!connected || !publicKey) {
-        throw new Error("Failed to reconnect wallet after payment");
-      }
-
-      // Create multisig immediately after payment
-      const multisigResult = await createMultisig.mutateAsync({
-        creator: publicKey,
-        email: formData.companyEmail,
-        configAuthority: publicKey,
-      });
-
       if (!multisigResult?.multisigPda) {
-        throw new Error("Failed to create multisig: Invalid result");
+        throw new Error("Failed to get multisig address");
       }
 
       // Create organization
@@ -181,8 +179,7 @@ export function VendorRegistrationModal({
         },
       });
 
-      // Success handling
-      console.log("Registration completed successfully");
+      console.log("Registration completed successfully", response);
       setPaymentInitiated(false);
       localStorage.removeItem("vendorRegistrationData");
       onOpenChange(false);
@@ -198,10 +195,108 @@ export function VendorRegistrationModal({
             : "Failed to complete registration"
         );
       }
-      resetState();
+      setIsSubmitting(false);
+      setFormDisabled(false);
       setPaymentInitiated(false);
+      processingRef.current = false;
+      hasExitedRef.current = false;
     }
   };
+
+  // const handlePaymentSuccess = async () => {
+  //   if (processingRef.current) return;
+  //   processingRef.current = true;
+  //   hasExitedRef.current = false;
+
+  //   try {
+  //     console.log("Payment success callback triggered");
+  //     setStep("processing");
+
+  //     // Add delay to ensure state is set
+  //     await new Promise((resolve) => setTimeout(resolve, 1000));
+
+  //     // Get stored data first
+  //     const storedData = localStorage.getItem("vendorRegistrationData");
+  //     if (!storedData) {
+  //       throw new Error("Registration data not found");
+  //     }
+  //     const formData = JSON.parse(storedData) as RegistrationFormData;
+
+  //     // Wait for wallet connection
+  //     const maxRetries = 5;
+  //     let retries = 0;
+
+  //     while (!connected && retries < maxRetries) {
+  //       await new Promise((resolve) => setTimeout(resolve, 1000));
+  //       retries++;
+
+  //       if (!connected && wallet?.adapter.name === "Particle") {
+  //         try {
+  //           await connect();
+  //         } catch (error) {
+  //           console.warn("Reconnection attempt failed:", error);
+  //         }
+  //       }
+  //     }
+
+  //     if (!connected || !publicKey) {
+  //       throw new Error("Failed to reconnect wallet after payment");
+  //     }
+
+  //     // Create multisig immediately after payment
+  //     const multisigResult = await createMultisig.mutateAsync({
+  //       creator: publicKey,
+  //       email: formData.companyEmail,
+  //       configAuthority: publicKey,
+  //     });
+
+  //     if (!multisigResult?.multisigPda) {
+  //       throw new Error("Failed to create multisig: Invalid result");
+  //     }
+
+  //     // Create organization
+  //     const response = await createOrganization.mutateAsync({
+  //       name: formData.companyName,
+  //       multisig_wallet: multisigResult.multisigPda.toBase58(),
+  //       business_details: {
+  //         companyName: formData.companyName,
+  //         companyAddress: formData.companyAddress,
+  //         companyPhone: formData.companyPhone,
+  //         companyEmail: formData.companyEmail,
+  //         companyWebsite: formData.companyWebsite,
+  //         registrationNumber: formData.registrationNumber,
+  //         taxNumber: formData.taxNumber,
+  //         ownerName: formData.ownerName,
+  //         ownerEmail: formData.companyEmail,
+  //         ownerWalletAddress: publicKey.toBase58(),
+  //       },
+  //     });
+
+  //     // Success handling
+  //     console.log("Registration completed successfully");
+  //     setPaymentInitiated(false);
+  //     localStorage.removeItem("vendorRegistrationData");
+  //     onOpenChange(false);
+  //     onSubmitSuccess();
+  //     toast.success("Organization registered successfully!");
+  //     resetState();
+  //   } catch (error) {
+  //     console.error("Registration error:", error);
+  //     if (!hasExitedRef.current) {
+  //       toast.error(
+  //         error instanceof Error
+  //           ? error.message
+  //           : "Failed to complete registration"
+  //       );
+  //     }
+  //     // resetState();
+  //     setIsSubmitting(false);
+  //     setFormDisabled(false);
+  //     setPaymentInitiated(false);
+  //     processingRef.current = false;
+  //     hasExitedRef.current = false;
+  //   }
+  // };
 
   const handleInitialSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -303,8 +398,12 @@ export function VendorRegistrationModal({
       toast.error(
         error instanceof Error ? error.message : "Failed to initialize payment"
       );
-      resetState();
+      // resetState();
+      setIsSubmitting(false);
+      setFormDisabled(false);
       setPaymentInitiated(false);
+      processingRef.current = false;
+      hasExitedRef.current = false;
     }
   };
 
@@ -318,17 +417,23 @@ export function VendorRegistrationModal({
         }
       }}
     >
+      {/* <Dialog open={isOpen} onOpenChange={handleOpenChange}> */}
       <DialogTrigger asChild>
         <Button>
           <FiPlus /> Register Vendor
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        onPointerDownOutside={(e) => {
+          e.preventDefault();
+          if (formDisabled) return;
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Register Vendor</DialogTitle>
         </DialogHeader>
-
         {step === "details" && (
           <form onSubmit={handleInitialSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -411,7 +516,6 @@ export function VendorRegistrationModal({
             </Button>
           </form>
         )}
-
         {step === "processing" && (
           <div className="py-8 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />

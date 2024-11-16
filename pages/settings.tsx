@@ -321,18 +321,23 @@ export default function SettingsPage() {
                   <div className="space-y-2">
                     <p className="text-sm font-medium"> Multisig Account</p>
                     <Input
-                      value={(() => {
-                        const createKey = PublicKey.findProgramAddressSync(
-                          [Buffer.from("squad"), publicKey!.toBuffer()],
-                          new PublicKey(
-                            "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
-                          )
-                        )[0];
-                        const [multisigPda] = getMultisigPda({
-                          createKey: createKey,
-                        });
-                        return multisigPda.toBase58();
-                      })()}
+                      // value={(() => {
+                      //   // const createKey = PublicKey.findProgramAddressSync(
+                      //   //   [Buffer.from("squad"), publicKey!.toBuffer()],
+                      //   //   new PublicKey(
+                      //   //     "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
+                      //   //   )
+                      //   // )[0];
+                      //   if (!publicKey) {
+                      //     return "Multsig not found"
+                      //   }
+                      //   const createKey = publicKey;
+                      //   const [multisigPda] = getMultisigPda({
+                      //     createKey: createKey,
+                      //   });
+                      //   return multisigPda.toBase58();
+                      // })()}
+                      value={`${organization.multisig_wallet}`}
                       disabled
                       type="text"
                       className="text-xs"
@@ -345,15 +350,18 @@ export default function SettingsPage() {
                     </p>
                     <Input
                       value={(() => {
-                        const createKey = PublicKey.findProgramAddressSync(
-                          [Buffer.from("squad"), publicKey!.toBuffer()],
-                          new PublicKey(
-                            "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
-                          )
-                        )[0];
-                        const [multisigPda] = getMultisigPda({
-                          createKey: createKey,
-                        });
+                        // const createKey = PublicKey.findProgramAddressSync(
+                        //   [Buffer.from("squad"), publicKey!.toBuffer()],
+                        //   new PublicKey(
+                        //     "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
+                        //   )
+                        // )[0];
+                        // const [multisigPda] = getMultisigPda({
+                        //   createKey: createKey,
+                        // });
+                        const multisigPda = new PublicKey(
+                          `${organization.multisig_wallet}`
+                        );
                         const [vaultPda] = getVaultPda({
                           multisigPda,
                           index: 0,

@@ -24,8 +24,8 @@ const WalletProviderComponent: FC<PropsWithChildren> = ({ children }) => {
           chainName: "solana",
           chainId: 101,
           wallet: {
-            displayWalletEntry: false,
-            uiMode: "light",
+            displayWalletEntry: true,
+            uiMode: "dark",
             customStyle: {
               light: {
                 colorAccent: "#1A1A1A",

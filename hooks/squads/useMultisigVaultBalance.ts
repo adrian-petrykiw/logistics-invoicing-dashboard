@@ -27,7 +27,7 @@ export function useMultisigVaultBalance(multisigPda: PublicKey | null) {
     enabled: !!multisigPda,
     retry: 3,
     retryDelay: 1000,
-    staleTime: 30000, // Consider data stale after 30 seconds
+    staleTime: 60 * 1000,
     refetchOnWindowFocus: true,
   });
 }

@@ -293,6 +293,50 @@ export class SquadsService {
     };
   }
 
+  async createMultisig({
+    creator,
+    email,
+  }: {
+    creator: PublicKey;
+    email: string;
+  }) {
+    const createKey = Keypair.generate().publicKey;
+
+    const [multisigPda] = multisig.getMultisigPda({
+      createKey: createKey,
+    });
+
+    const programConfigPda = multisig.getProgramConfigPda({})[0];
+    const programConfig =
+      await multisig.accounts.ProgramConfig.fromAccountAddress(
+        this.connection,
+        programConfigPda
+      );
+
+    const createIx = await multisig.instructions.multisigCreateV2({
+      createKey,
+      creator,
+      multisigPda,
+      configAuthority: null,
+      threshold: 1,
+      members: [
+        {
+          key: creator,
+          permissions: Permissions.all(),
+        },
+      ],
+      timeLock: 0,
+      treasury: programConfig.treasury,
+      rentCollector: null,
+    });
+
+    return {
+      createIx,
+      multisigPda,
+      createKey,
+    };
+  }
+
   async addMemberToMultisig({
     multisigPda,
     memberPublicKey,

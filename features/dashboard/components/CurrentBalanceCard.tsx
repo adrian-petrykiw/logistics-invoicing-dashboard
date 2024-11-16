@@ -13,17 +13,29 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { getMultisigPda } from "@sqds/multisig";
 import { DepositModal } from "./DepositModal";
 import { useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
 
 function BalanceCard() {
   const { publicKey } = useWallet();
-  const createKey = PublicKey.findProgramAddressSync(
-    [Buffer.from("squad"), publicKey!.toBuffer()],
-    new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
-  )[0];
 
+  if (!publicKey) {
+    console.error("Wallet public key is not available");
+    toast.error("Wallet unavailable");
+
+    return {
+      balance: <div className="text-2xl font-bold text-muted">N/A</div>,
+      multisigPda: null,
+      usdcBalance: null,
+      isLoading: false,
+      refetchBalance: () => Promise.resolve(),
+    };
+  }
+
+  // Only proceed with getMultisigPda if we have a valid publicKey
   const [multisigPda] = getMultisigPda({
-    createKey: createKey,
+    createKey: publicKey,
   });
+
   const {
     data: usdcBalance,
     isLoading,
@@ -75,9 +87,13 @@ export function CurrentBalanceCard() {
   );
 
   const handleRefresh = async () => {
+    if (!balanceCard.multisigPda) {
+      return; // Early return if no multisigPda available
+    }
+
     // Invalidate and refetch balance using the new object syntax
     await queryClient.invalidateQueries({
-      queryKey: ["multisigBalance", balanceCard.multisigPda?.toBase58()],
+      queryKey: ["multisigBalance", balanceCard.multisigPda.toBase58()],
     });
 
     // Refetch balance
@@ -102,7 +118,9 @@ export function CurrentBalanceCard() {
             size="sm"
             className="p-0 h-6 w-6"
             onClick={handleRefresh}
-            disabled={isRefetching || balanceCard.isLoading}
+            disabled={
+              isRefetching || balanceCard.isLoading || !balanceCard.multisigPda
+            }
           >
             <RefreshCw
               className={cn(
