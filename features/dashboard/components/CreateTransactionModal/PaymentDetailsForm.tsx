@@ -40,13 +40,13 @@ export function PaymentDetailsForm({
 
   const publicKey = new PublicKey(userWalletAddress);
 
-  const createKey = PublicKey.findProgramAddressSync(
-    [Buffer.from("squad"), publicKey.toBuffer()],
-    new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
-  )[0];
+  // const createKey = PublicKey.findProgramAddressSync(
+  //   [Buffer.from("squad"), publicKey.toBuffer()],
+  //   new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
+  // )[0];
 
   const [multisigPda] = getMultisigPda({
-    createKey: createKey,
+    createKey: publicKey,
   });
 
   // Fetch credit balance

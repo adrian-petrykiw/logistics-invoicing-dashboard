@@ -84,7 +84,10 @@ async function handleGetTransactions(
   try {
     const { organization_id } = req.query;
 
-    const query = supabaseAdmin.from("transactions").select("*");
+    const query = supabaseAdmin
+      .from("transactions")
+      .select("*")
+      .order("created_at", { ascending: false });
 
     if (organization_id) {
       query.eq("organization_id", organization_id);

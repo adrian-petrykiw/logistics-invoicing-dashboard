@@ -11,6 +11,10 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  Transaction,
+  VersionedTransaction,
+  sendAndConfirmTransaction,
+  ComputeBudgetProgram,
 } from "@solana/web3.js";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -18,10 +22,11 @@ import {
   accounts,
   getMultisigPda,
   getVaultPda,
+  instructions,
   PROGRAM_ID,
   rpc,
 } from "@sqds/multisig";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, UserRoundCheck } from "lucide-react";
 import { TransactionService } from "@/services/transactionservice";
 import { useVendorDetails } from "../../hooks/useVendorDetails";
 import { getApiUser } from "@/utils/user";
@@ -41,6 +46,8 @@ import {
   USDC_MINT,
 } from "@/utils/constants";
 import { solanaService } from "@/services/solana";
+import transactions from "@/pages/api/transactions";
+import { CreateTransactionDTO } from "@/types/transaction";
 
 const heliusConnection = new Connection(
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL!,
@@ -154,7 +161,7 @@ export function Confirmation({
   const [status, setStatus] = useState<StatusType>("initial");
   const [isVendorLoading, setIsVendorLoading] = useState(false);
   // const { connection } = useConnection();
-  const { publicKey, wallet, signTransaction } = useWallet();
+  const { publicKey, wallet, signTransaction, sendTransaction } = useWallet();
   const { user } = useAuth();
   const apiUser = getApiUser(user);
   const api = useApi(apiUser);
@@ -199,22 +206,13 @@ export function Confirmation({
         return size;
       };
 
-      // 1. Get sender's multisig and vault PDAs
-      // const senderCreateKey = PublicKey.findProgramAddressSync(
-      //   [Buffer.from("squad"), publicKey.toBuffer()],
-      //   PROGRAM_ID
-      // )[0];
-      // console.log("Sender create key:", senderCreateKey.toString());
+      const encryptionKeys: Record<string, string> = {};
+      const paymentHashes: Record<string, string> = {};
 
-      // const [senderMultisigPda] = getMultisigPda({
-      //   createKey: senderCreateKey,
-      // });
+      // 1. Get sender's multisig and vault PDAs
       const senderMultisigPda = new PublicKey(
         `${organization?.multisig_wallet}`
       );
-      // const senderMultisigPda = new PublicKey(
-      //   "7XjRxS1VM6rP4wsy4vDeuJ3KDUoMvVfmLqs896QHN2Dk"
-      // );
       console.log("Sender multisig PDA:", senderMultisigPda.toString());
 
       const [senderVaultPda] = getVaultPda({
@@ -240,7 +238,7 @@ export function Confirmation({
       }
 
       // 3. Get USDC ATAs
-      const senderVaultAta = await getAssociatedTokenAddress(
+      const senderUsdcAta = await getAssociatedTokenAddress(
         USDC_MINT,
         senderVaultPda,
         true,
@@ -248,8 +246,7 @@ export function Confirmation({
         ASSOCIATED_TOKEN_PROGRAM_ID
       );
 
-      console.log("Sender vault ATA:", senderVaultAta.toString());
-      return;
+      console.log("Sender vault USDC ATA:", senderUsdcAta.toString());
 
       // 4. Fetch vendor details
       setStatus("creating");
@@ -261,11 +258,15 @@ export function Confirmation({
       );
       console.log("Received vendor info:", vendorInfo);
 
-      const receiverPubkey = new PublicKey(vendorInfo.ownerAddress);
-      const receiverAta = await getAssociatedTokenAddress(
-        new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-        receiverPubkey
+      const recieverVaultPda = new PublicKey(vendorInfo.vaultAddress);
+      const receiverUsdcAta = await getAssociatedTokenAddress(
+        USDC_MINT,
+        recieverVaultPda,
+        true,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
       );
+      console.log("receiverUsdcAta: ", receiverUsdcAta);
 
       // 5. Prepare batches with size tracking
       const batches: Array<{
@@ -297,8 +298,8 @@ export function Confirmation({
       for (const invoice of vendorData.invoices) {
         // Create transfer instruction
         const transferInstruction = createTransferInstruction(
-          senderVaultAta,
-          receiverAta,
+          senderUsdcAta,
+          receiverUsdcAta,
           senderVaultPda,
           BigInt(Math.round(invoice.amount * 1e6))
         );
@@ -317,12 +318,15 @@ export function Confirmation({
         const { encrypted: encryptedData, key: encryptionKey } =
           encryptPaymentData(invoiceData);
 
+        encryptionKeys[invoice.number] = encryptionKey;
+        paymentHashes[invoice.number] = createHash("sha256")
+          .update(JSON.stringify(invoiceData))
+          .digest("hex");
+
         // Create proof object
         const proof = {
           data: encryptedData,
-          hash: createHash("sha256")
-            .update(JSON.stringify(invoiceData))
-            .digest("hex"),
+          hash: paymentHashes[invoice.number],
           version: "1.0",
           invoiceNumber: invoice.number,
         };
@@ -439,127 +443,301 @@ export function Confirmation({
 
         // Create vault transaction
         const newTransactionIndex = BigInt(
-          Number(senderMultisigInfo.transactionIndex) + i + 1
+          Number(senderMultisigInfo.transactionIndex) === 0
+            ? 1
+            : Number(senderMultisigInfo.transactionIndex) + 1
         );
-        console.log(
-          `Creating vault transaction ${newTransactionIndex.toString()}`
-        );
+        console.log("Using transaction index:", newTransactionIndex.toString());
+        let createTxSignature = ``;
 
-        const createTxSignature = await rpc.vaultTransactionCreate({
-          connection: heliusConnection,
-          feePayer: adminKeypair,
-          multisigPda: senderMultisigPda,
-          transactionIndex: newTransactionIndex,
-          creator: publicKey!,
-          vaultIndex: 0,
-          ephemeralSigners: 0,
-          transactionMessage: transactionMessage,
-          memo: `Batch ${i + 1}/${batches.length} - Invoices: ${batch.invoices
-            .map((inv) => inv.number)
-            .join(", ")}`,
-        });
+        try {
+          let createIx = await instructions.vaultTransactionCreate({
+            multisigPda: senderMultisigPda,
+            transactionIndex: newTransactionIndex,
+            creator: publicKey,
+            vaultIndex: 0,
+            ephemeralSigners: 0,
+            transactionMessage: transactionMessage,
+            memo: `Batch ${i + 1}/${batches.length} - Invoices: ${batch.invoices
+              .map((inv) => inv.number)
+              .join(", ")}`,
+          });
 
-        const createVaultStatus =
-          await solanaService.confirmTransactionWithRetry(
-            createTxSignature,
-            "confirmed",
-            5, // maxRetries
-            30000, // timeout
-            heliusConnection
+          const latestBlockhash = await heliusConnection.getLatestBlockhash(
+            "confirmed"
           );
-        if (!createVaultStatus) {
-          throw new Error("Failed to get transaction status");
-        }
-        if (createVaultStatus!.err) {
-          throw new Error(
-            `Transaction failed: ${JSON.stringify(createVaultStatus!.err)}`
+          const creatingTx = await solanaService.addPriorityFee(
+            new Transaction().add(createIx),
+            publicKey
           );
+          creatingTx.feePayer = publicKey;
+          creatingTx.recentBlockhash = latestBlockhash.blockhash;
+
+          if (!signTransaction) {
+            throw new Error("Wallet signTransaction is not available");
+          }
+
+          const signedTransaction = await signTransaction(creatingTx);
+          console.log("Create TX signed");
+
+          const signature = await heliusConnection.sendRawTransaction(
+            signedTransaction.serialize(),
+            {
+              skipPreflight: false,
+              preflightCommitment: "confirmed",
+              maxRetries: 3,
+            }
+          );
+          console.log("Create TX sent");
+
+          const status = await solanaService.confirmTransactionWithRetry(
+            signature,
+            "confirmed"
+          );
+
+          console.log("Create tx sig: ", signature);
+          console.log("Create tx status: ", status);
+          createTxSignature = signature;
+        } catch (e) {
+          console.error("Failed to create tx: ", e);
+          throw e;
         }
+
         console.log("Created vault transaction:", createTxSignature);
 
-        // Create proposal
-        const proposalSignature = await rpc.proposalCreate({
-          connection: heliusConnection,
-          feePayer: adminKeypair,
-          multisigPda: senderMultisigPda,
-          transactionIndex: newTransactionIndex,
-          creator: Keypair.generate(),
-        });
+        await new Promise((resolve) => setTimeout(resolve, 20000));
+        console.log("Awaited 20 sec after create");
 
-        const proposalStatus = await solanaService.confirmTransactionWithRetry(
-          proposalSignature,
-          "confirmed",
-          5,
-          30000,
-          heliusConnection
-        );
-        if (!proposalStatus) {
-          throw new Error("Failed to get proposal status");
-        }
-        if (proposalStatus!.err) {
-          throw new Error(
-            `Transaction failed: ${JSON.stringify(proposalStatus!.err)}`
+        // Create proposal with instructions instead of rpc
+        try {
+          let proposalIx = await instructions.proposalCreate({
+            multisigPda: senderMultisigPda,
+            transactionIndex: newTransactionIndex,
+            creator: publicKey,
+          });
+
+          const proposalTx = await solanaService.addPriorityFee(
+            new Transaction().add(proposalIx),
+            publicKey
           );
-        }
-        console.log("Created proposal:", proposalSignature);
+          proposalTx.feePayer = publicKey;
+          proposalTx.recentBlockhash = (
+            await heliusConnection.getLatestBlockhash()
+          ).blockhash;
 
-        setStatus("confirming");
-
-        // Vote on proposal
-        const voteSignature = await rpc.proposalApprove({
-          connection: heliusConnection,
-          feePayer: adminKeypair,
-          multisigPda: senderMultisigPda,
-          transactionIndex: newTransactionIndex,
-          member: Keypair.generate(),
-        });
-
-        const voteStatus = await solanaService.confirmTransactionWithRetry(
-          voteSignature,
-          "confirmed",
-          5,
-          30000,
-          heliusConnection
-        );
-        if (!voteStatus) {
-          throw new Error("Failed to get vote status");
-        }
-        if (voteStatus!.err) {
-          throw new Error(
-            `Transaction failed: ${JSON.stringify(voteStatus!.err)}`
+          const signedProposalTx = await signTransaction(proposalTx);
+          const proposalSignature = await heliusConnection.sendRawTransaction(
+            signedProposalTx.serialize(),
+            {
+              skipPreflight: false,
+              preflightCommitment: "confirmed",
+              maxRetries: 3,
+            }
           );
-        }
-        console.log("Voted on proposal:", voteSignature);
 
-        // Execute transaction
-        const executeTxSignature = await rpc.vaultTransactionExecute({
-          connection: heliusConnection,
-          feePayer: adminKeypair,
-          multisigPda: senderMultisigPda,
-          transactionIndex: newTransactionIndex,
-          member: publicKey!,
-          sendOptions: { skipPreflight: true },
-        });
+          const proposalStatus =
+            await solanaService.confirmTransactionWithRetry(
+              proposalSignature,
+              "confirmed",
+              10,
+              60000,
+              heliusConnection
+            );
+          if (!proposalStatus) {
+            throw new Error("Failed to get proposal status");
+          }
+          if (proposalStatus!.err) {
+            throw new Error(
+              `Transaction failed: ${JSON.stringify(proposalStatus!.err)}`
+            );
+          }
+          console.log("Created proposal:", proposalSignature);
 
-        const executeStatus = await solanaService.confirmTransactionWithRetry(
-          executeTxSignature,
-          "confirmed",
-          5,
-          30000,
-          heliusConnection
-        );
-        if (!executeStatus) {
-          throw new Error("Failed to get execution status");
-        }
-        if (executeStatus!.err) {
-          throw new Error(
-            `Transaction failed: ${JSON.stringify(executeStatus!.err)}`
+          setStatus("confirming");
+
+          await new Promise((resolve) => setTimeout(resolve, 20000));
+          console.log("Awaited 20 sec after proposal creation");
+
+          // Vote on proposal using instructions
+          let voteIx = await instructions.proposalApprove({
+            multisigPda: senderMultisigPda,
+            transactionIndex: newTransactionIndex,
+            member: publicKey,
+          });
+
+          const voteTx = await solanaService.addPriorityFee(
+            new Transaction().add(voteIx),
+            publicKey
           );
+          voteTx.feePayer = publicKey;
+          voteTx.recentBlockhash = (
+            await heliusConnection.getLatestBlockhash()
+          ).blockhash;
+
+          const signedVoteTx = await signTransaction(voteTx);
+          const voteSignature = await heliusConnection.sendRawTransaction(
+            signedVoteTx.serialize(),
+            {
+              skipPreflight: false,
+              preflightCommitment: "confirmed",
+              maxRetries: 3,
+            }
+          );
+
+          const voteStatus = await solanaService.confirmTransactionWithRetry(
+            voteSignature,
+            "confirmed",
+            10,
+            60000,
+            heliusConnection
+          );
+          if (!voteStatus) {
+            throw new Error("Failed to get vote status");
+          }
+          if (voteStatus!.err) {
+            throw new Error(
+              `Transaction failed: ${JSON.stringify(voteStatus!.err)}`
+            );
+          }
+          console.log("Voted on proposal:", voteSignature);
+
+          await new Promise((resolve) => setTimeout(resolve, 30000));
+          console.log("Awaited 30 sec after voting");
+
+          console.log("Checking token accounts before execution:");
+          console.log("Source ATA:", senderUsdcAta.toString());
+          console.log("Destination ATA:", receiverUsdcAta.toString());
+
+          const storeTransaction = async (
+            executeTxSignature: string,
+            batch: (typeof batches)[0],
+            encryptionKeys: Record<string, string>,
+            paymentHashes: Record<string, string>
+          ) => {
+            const transactionData: CreateTransactionDTO = {
+              organization_id: organization?.id!,
+              signature: executeTxSignature,
+              token_mint: USDC_MINT.toString(),
+              proof_data: {
+                encryption_keys: encryptionKeys,
+                payment_hashes: paymentHashes,
+              },
+              amount: batch.invoices.reduce((sum, inv) => sum + inv.amount, 0),
+              transaction_type: "payment",
+              sender: {
+                multisig_address: senderMultisigPda.toString(),
+                vault_address: senderVaultPda.toString(),
+                wallet_address: publicKey.toString(),
+              },
+              recipient: {
+                multisig_address: vendorInfo.multisigAddress,
+                vault_address: vendorInfo.vaultAddress,
+              },
+              invoices: batch.invoices.map((inv) => ({
+                number: inv.number,
+                amount: inv.amount,
+              })),
+            };
+
+            const response = await fetch("/api/transactions/store", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...headers,
+              },
+              body: JSON.stringify(transactionData),
+            });
+
+            if (!response.ok) {
+              console.error(
+                "Failed to store transaction:",
+                await response.json()
+              );
+              throw new Error("Failed to store transaction record");
+            }
+
+            return await response.json();
+          };
+
+          try {
+            const sourceAccount = await heliusConnection.getAccountInfo(
+              senderUsdcAta
+            );
+            const destAccount = await heliusConnection.getAccountInfo(
+              receiverUsdcAta
+            );
+            console.log("Source account exists:", !!sourceAccount);
+            console.log("Destination account exists:", !!destAccount);
+          } catch (error) {
+            console.error("Error checking token accounts:", error);
+          }
+
+          // Execute transaction using instructions
+          let executeIxResponse = await instructions.vaultTransactionExecute({
+            connection: heliusConnection,
+            multisigPda: senderMultisigPda,
+            transactionIndex: newTransactionIndex,
+            member: publicKey,
+          });
+
+          console.log(
+            "Execute instruction response:",
+            JSON.stringify(executeIxResponse)
+          );
+          const executeTx = await solanaService.addPriorityFee(
+            new Transaction().add(executeIxResponse.instruction),
+            publicKey
+          );
+          executeTx.feePayer = publicKey;
+          executeTx.recentBlockhash = (
+            await heliusConnection.getLatestBlockhash()
+          ).blockhash;
+
+          if (!signTransaction) {
+            throw new Error("Wallet signTransaction is not available");
+          }
+          const signedExecuteTx = await signTransaction(executeTx);
+          const executeTxSignature = await heliusConnection.sendRawTransaction(
+            signedExecuteTx.serialize(),
+            {
+              skipPreflight: true,
+              preflightCommitment: "confirmed",
+              maxRetries: 3,
+            }
+          );
+
+          const executeStatus = await solanaService.confirmTransactionWithRetry(
+            executeTxSignature,
+            "confirmed",
+            10,
+            60000,
+            heliusConnection
+          );
+
+          if (!executeStatus) {
+            throw new Error("Failed to get execution status");
+          }
+          if (executeStatus!.err) {
+            throw new Error(
+              `Transaction failed: ${JSON.stringify(executeStatus!.err)}`
+            );
+          }
+
+          console.log("Executed transaction:", executeTxSignature, {
+            batchSize: batch.estimatedSize,
+            invoiceCount: batch.invoices.length,
+          });
+
+          await storeTransaction(
+            executeTxSignature,
+            batch,
+            encryptionKeys,
+            paymentHashes
+          );
+        } catch (error) {
+          console.error("Transaction sequence failed:", error);
+          throw error;
         }
-        console.log("Executed transaction:", executeTxSignature, {
-          batchSize: batch.estimatedSize,
-          invoiceCount: batch.invoices.length,
-        });
       }
 
       setStatus("confirmed");
@@ -573,286 +751,6 @@ export function Confirmation({
       setIsVendorLoading(false);
     }
   };
-
-  // const handleConfirmOLD = async () => {
-  //   try {
-  //     if (!publicKey || !wallet?.adapter || !apiUser) {
-  //       toast.error("Please connect your wallet");
-  //       return;
-  //     }
-
-  //     setIsVendorLoading(true);
-  //     console.log("Starting confirmation with vendor data:", vendorData);
-  //     setStatus("encrypting");
-
-  //     // Get the sender multisig PDA
-  //     const senderCreateKey = PublicKey.findProgramAddressSync(
-  //       [Buffer.from("squad"), publicKey.toBuffer()],
-  //       new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
-  //     )[0];
-  //     console.log("Sender create key:", senderCreateKey.toString());
-
-  //     const [senderMultisigPda] = getMultisigPda({
-  //       createKey: senderCreateKey,
-  //     });
-  //     console.log("Sender multisig PDA:", senderMultisigPda.toString());
-
-  //     const [senderVaultPda] = getVaultPda({
-  //       multisigPda: senderMultisigPda,
-  //       index: 0,
-  //     });
-  //     console.log("Sender vault PDA:", senderVaultPda.toString());
-
-  //     setStatus("creating");
-  //     console.log("Fetching vendor details for:", vendorData.vendor);
-  //     const headers = getAuthHeaders(apiUser);
-  //     const vendorInfo = await TransactionService.fetchVendorDetails(
-  //       vendorData.vendor,
-  //       headers
-  //     );
-  //     console.log("Received vendor info:", vendorInfo);
-
-  //     const receiverCreateKey = new PublicKey(vendorInfo.ownerAddress);
-
-  //     const [receiverMultisigPda] = getMultisigPda({
-  //       createKey: receiverCreateKey,
-  //     });
-
-  //     const result = await TransactionService.createAndExecuteTransaction({
-  //       connection,
-  //       multisigPda: receiverMultisigPda,
-  //       vaultPda: new PublicKey(vendorInfo.vaultAddress),
-  //       invoices: vendorData.invoices.map((invoice) => ({
-  //         number: invoice.number,
-  //         amount: invoice.amount,
-  //         recipient: vendorInfo.ownerAddress,
-  //       })),
-  //       businessData: {
-  //         vendor: vendorData.vendor,
-  //         additionalInfo: vendorData.additionalInfo,
-  //         paymentMethod: paymentData.paymentMethod,
-  //         timestamp: Date.now(),
-  //         vendorMultisig: vendorInfo.multisigAddress,
-  //       },
-  //       senderPublicKey: publicKey,
-  //     });
-
-  //     console.log("Transaction result:", result);
-  //     setStatus("confirming");
-  //     setStatus("confirmed");
-  //   } catch (error) {
-  //     console.error("Transaction failed:", error);
-  //     toast.error(
-  //       error instanceof Error ? error.message : "Transaction failed"
-  //     );
-  //     setStatus("initial");
-  //   } finally {
-  //     setIsVendorLoading(false);
-  //   }
-  // };
-
-  // const handleConfirm = async () => {
-  //   try {
-  //     if (!publicKey || !signTransaction || !apiUser) {
-  //       toast.error("Please connect your wallet");
-  //       return;
-  //     }
-
-  //     setIsVendorLoading(true);
-  //     console.log("Starting confirmation with vendor data:", vendorData);
-  //     setStatus("encrypting");
-
-  //     // Use heliusConnection for balance checks
-  //     const solBalance = await heliusConnection.getBalance(publicKey);
-  //     console.log("Current SOL balance:", solBalance / LAMPORTS_PER_SOL);
-
-  //     // Fetch vendor details
-  //     console.log("Fetching vendor details for:", vendorData.vendor);
-  //     const headers = getAuthHeaders(apiUser);
-  //     const vendorInfo = await TransactionService.fetchVendorDetails(
-  //       vendorData.vendor,
-  //       headers
-  //     );
-  //     console.log("Received vendor info:", vendorInfo);
-
-  //     // Check if recipient has USDC account
-  //     let recipientHasATA = false;
-  //     try {
-  //       const recipientATA = await getAssociatedTokenAddress(
-  //         new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-  //         new PublicKey(vendorInfo.ownerAddress)
-  //       );
-  //       await getAccount(heliusConnection, recipientATA);
-  //       recipientHasATA = true;
-  //       console.log("Recipient has USDC account");
-  //     } catch (error) {
-  //       if (error instanceof TokenAccountNotFoundError) {
-  //         recipientHasATA = false;
-  //         console.log("Recipient needs USDC account creation");
-  //       } else {
-  //         console.error("Error checking recipient USDC account:", error);
-  //         throw error;
-  //       }
-  //     }
-
-  //     // Calculate required fees
-  //     const LAMPORTS_FOR_ATA = 0.002 * LAMPORTS_PER_SOL;
-  //     const LAMPORTS_FOR_TRANSFER = 0.000005 * LAMPORTS_PER_SOL;
-  //     const requiredLamports = recipientHasATA
-  //       ? LAMPORTS_FOR_TRANSFER
-  //       : LAMPORTS_FOR_ATA + LAMPORTS_FOR_TRANSFER;
-
-  //     if (solBalance < requiredLamports) {
-  //       throw new Error(
-  //         `Insufficient SOL for transaction fees. Need ${(
-  //           requiredLamports / LAMPORTS_PER_SOL
-  //         ).toFixed(6)} SOL, have ${(solBalance / LAMPORTS_PER_SOL).toFixed(
-  //           6
-  //         )} SOL`
-  //       );
-  //     }
-
-  //     setStatus("creating");
-
-  //     // Calculate total amount from all invoices
-  //     const totalAmount = vendorData.invoices.reduce(
-  //       (sum, invoice) => sum + invoice.amount,
-  //       0
-  //     );
-
-  //     // Check USDC balance
-  //     try {
-  //       const senderUsdcAddress = await getAssociatedTokenAddress(
-  //         new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
-  //         publicKey
-  //       );
-  //       const senderAccount = await getAccount(
-  //         heliusConnection,
-  //         senderUsdcAddress
-  //       );
-  //       const usdcBalance = Number(senderAccount.amount) / 10 ** 6;
-  //       console.log("Sender USDC balance:", usdcBalance);
-
-  //       if (usdcBalance < totalAmount) {
-  //         throw new Error(
-  //           `Insufficient USDC balance. Have ${usdcBalance}, need ${totalAmount}`
-  //         );
-  //       }
-  //     } catch (error) {
-  //       console.error("Error checking USDC balance:", error);
-  //       if (error instanceof TokenAccountNotFoundError) {
-  //         throw new Error("You don't have a USDC token account");
-  //       }
-  //       throw new Error("Failed to check USDC balance");
-  //     }
-
-  //     // Create transaction
-  //     const { transaction, blockhash, lastValidBlockHeight } =
-  //       await createUsdcTransferTransaction({
-  //         amount: totalAmount,
-  //         recipientWallet: new PublicKey(vendorInfo.ownerAddress),
-  //         connection: heliusConnection,
-  //         publicKey,
-  //       });
-
-  //     console.log("Transaction created, proceeding to sign");
-  //     setStatus("confirming");
-
-  //     // Sign transaction
-  //     const signedTx = await signTransaction(transaction);
-  //     console.log("Transaction signed");
-
-  //     // Send transaction using wallet's connection
-  //     const signature = await heliusConnection.sendRawTransaction(
-  //       signedTx.serialize(),
-  //       {
-  //         skipPreflight: true,
-  //         maxRetries: 5,
-  //       }
-  //     );
-
-  //     console.log("Transaction sent:", signature);
-
-  //     // Wait for confirmation using a more robust strategy
-  //     try {
-  //       // const confirmation = await heliusConnection.confirmTransaction(
-  //       //   {
-  //       //     signature,
-  //       //     blockhash,
-  //       //     lastValidBlockHeight,
-  //       //   },
-  //       //   "confirmed"
-  //       // );
-
-  //       // if (confirmation.value.err) {
-  //       //   throw new Error(`Transaction failed: ${confirmation.value.err}`);
-  //       // }
-
-  //       // // Double check the transaction
-  //       // const txResult = await heliusConnection.getTransaction(signature, {
-  //       //   maxSupportedTransactionVersion: 0,
-  //       // });
-
-  //       // if (!txResult) {
-  //       //   throw new Error("Transaction confirmation failed");
-  //       // }
-
-  //       console.log("Transaction confirmed");
-  //       // Store transaction record
-  //       const transactionRecord = {
-  //         signature,
-  //         timestamp: Date.now(),
-  //         invoices: vendorData.invoices,
-  //         vendor: vendorData.vendor,
-  //         additionalInfo: vendorData.additionalInfo,
-  //         paymentMethod: paymentData.paymentMethod,
-  //         amount: totalAmount,
-  //         recipientAddress: vendorInfo.ownerAddress,
-  //         senderAddress: publicKey.toString(),
-  //         fees: {
-  //           estimatedSol: requiredLamports / LAMPORTS_PER_SOL,
-  //           createdATA: !recipientHasATA,
-  //         },
-  //       };
-
-  //       console.log("Transaction record:", transactionRecord);
-
-  //       setStatus("confirmed");
-  //     } catch (error) {
-  //       console.error("Error confirming transaction:", error);
-
-  //       // Try to get the transaction status one more time
-  //       try {
-  //         const status = await connection.getSignatureStatus(signature);
-  //         console.log("Final transaction status:", status);
-
-  //         if (status.value?.err) {
-  //           throw new Error(`Transaction failed: ${status.value.err}`);
-  //         } else if (
-  //           status.value?.confirmationStatus === "confirmed" ||
-  //           status.value?.confirmationStatus === "finalized"
-  //         ) {
-  //           // Transaction actually succeeded
-  //           setStatus("confirmed");
-  //           return;
-  //         }
-  //       } catch (statusError) {
-  //         console.error("Failed to get final transaction status:", statusError);
-  //       }
-
-  //       // If we got here, the transaction definitely failed
-  //       throw new Error("Transaction failed to confirm");
-  //     }
-  //   } catch (error) {
-  //     console.error("Transaction failed:", error);
-  //     toast.error(
-  //       error instanceof Error ? error.message : "Transaction failed"
-  //     );
-  //     setStatus("initial");
-  //   } finally {
-  //     setIsVendorLoading(false);
-  //   }
-  // };
 
   if (status !== "initial") {
     return <TransactionStatus currentStatus={status} onDone={onClose} />;

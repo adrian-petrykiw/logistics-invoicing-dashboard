@@ -10,12 +10,14 @@ import {
   VersionedTransaction,
   Signer,
   Transaction,
+  ComputeBudgetProgram,
 } from "@solana/web3.js";
 import {
   getAccount,
   TokenAccountNotFoundError,
   Account,
 } from "@solana/spl-token";
+import bs58 from "bs58";
 
 export class SolanaService {
   private static instance: SolanaService;
@@ -47,8 +49,8 @@ export class SolanaService {
   async confirmTransactionWithRetry(
     signature: TransactionSignature,
     commitment: Commitment = "confirmed",
-    maxRetries: number = 5,
-    timeoutMs: number = 30000,
+    maxRetries: number = 10,
+    timeoutMs: number = 60000,
     connection?: Connection
   ): Promise<SignatureStatus | null> {
     const conn = connection || this.defaultConnection;
@@ -86,22 +88,24 @@ export class SolanaService {
         }
 
         console.log("Waiting before next confirmation check...");
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         retryCount++;
       } catch (error) {
         console.error(`Confirmation attempt ${retryCount + 1} failed:`, error);
         retryCount++;
 
         if (retryCount < maxRetries) {
-          const delay = 1000 * Math.pow(2, retryCount - 1);
+          const delay = 2000 * Math.pow(2, retryCount - 1);
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
     }
 
-    throw new Error(
+    console.error(
       `Failed to confirm transaction after ${maxRetries} attempts or ${timeoutMs}ms timeout`
     );
+
+    return null;
   }
 
   async sendAndConfirmTransaction(
@@ -348,6 +352,100 @@ export class SolanaService {
       console.error("Error fetching balance:", error);
       throw error;
     }
+  }
+
+  // Add this function near the top of your handleConfirm
+  async getPriorityFeeEstimate(
+    transaction: Transaction,
+    feePayer: PublicKey
+  ): Promise<number> {
+    try {
+      // Clone the transaction to avoid modifying the original
+      const tempTx = new Transaction().add(...transaction.instructions);
+
+      // Set the actual fee payer
+      tempTx.feePayer = feePayer;
+
+      // Get a recent blockhash
+      const { blockhash } = await this.defaultConnection.getLatestBlockhash(
+        "confirmed"
+      );
+      tempTx.recentBlockhash = blockhash;
+
+      const serializedTx = bs58.encode(
+        tempTx.serialize({
+          requireAllSignatures: false,
+          verifySignatures: false,
+        })
+      );
+
+      // Alternative approach: use accountKeys directly
+      const message = tempTx.compileMessage();
+      const accountKeys = message.accountKeys.map((key) => key.toBase58());
+
+      const response = await fetch(process.env.NEXT_PUBLIC_SOLANA_RPC_URL!, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "helius-priority-fee",
+          method: "getPriorityFeeEstimate",
+          params: [
+            {
+              accountKeys, // Use the actual account keys instead of serialized transaction
+              options: {
+                priorityLevel: "High",
+                includeVote: false,
+              },
+            },
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        console.error("Priority fee API error:", data.error);
+        return 50000; // Fallback fee if API returns error
+      }
+
+      console.log("Priority fee estimate:", data.result.priorityFeeEstimate);
+      return data.result.priorityFeeEstimate;
+    } catch (error) {
+      console.error("Failed to get priority fee estimate:", error);
+      return 50000; // Fallback priority fee in case of API error
+    }
+  }
+
+  // Helper to add priority fee instruction to a transaction
+  async addPriorityFee(
+    transaction: Transaction,
+    feePayer: PublicKey
+  ): Promise<Transaction> {
+    const priorityFee = await this.getPriorityFeeEstimate(
+      transaction,
+      feePayer
+    );
+
+    const modifiedTx = new Transaction();
+
+    // Add compute unit price instruction first
+    modifiedTx.add(
+      ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: priorityFee,
+      })
+    );
+
+    // Add compute unit limit instruction
+    modifiedTx.add(
+      ComputeBudgetProgram.setComputeUnitLimit({
+        units: 200000, // You can adjust this based on your needs
+      })
+    );
+
+    // Add all original instructions
+    transaction.instructions.forEach((ix) => modifiedTx.add(ix));
+
+    return modifiedTx;
   }
 }
 

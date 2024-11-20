@@ -71,13 +71,13 @@ export class TransactionService {
     );
 
     // Derive the vendor's multisig and vault addresses
-    const createKey = PublicKey.findProgramAddressSync(
-      [Buffer.from("squad"), vendorPublicKey.toBuffer()],
-      new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
-    )[0];
+    // const createKey = PublicKey.findProgramAddressSync(
+    //   [Buffer.from("squad"), vendorPublicKey.toBuffer()],
+    //   new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
+    // )[0];
 
     const [multisigPda] = getMultisigPda({
-      createKey: createKey,
+      createKey: vendorPublicKey,
     });
 
     const [vaultPda] = getVaultPda({

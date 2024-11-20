@@ -30,7 +30,10 @@ export function DepositModal() {
   const onrampInstance = useRef<any>(null);
 
   const checkVaultAndAtaStatus = async () => {
-    if (!publicKey) return { success: false, ata: null };
+    if (!publicKey) {
+      console.error("Wallet not connected");
+      return { success: false, ata: null, error: "Wallet not connected" };
+    }
 
     try {
       console.log("Starting vault and ATA status check...");
@@ -46,6 +49,14 @@ export function DepositModal() {
         ASSOCIATED_TOKEN_PROGRAM_ID
       );
 
+      // Log all the addresses for debugging
+      console.log("Addresses:", {
+        userPublicKey: publicKey.toBase58(),
+        multisigPda: multisigPda.toBase58(),
+        vaultPda: vaultPda.toBase58(),
+        ata: ata.toBase58(),
+      });
+
       const [vaultBalance, userBalance] = await Promise.all([
         solanaService.getBalance(vaultPda, "confirmed"),
         solanaService.getBalance(publicKey, "confirmed"),
@@ -60,9 +71,12 @@ export function DepositModal() {
       const vaultBalanceSol = vaultBalance / LAMPORTS_PER_SOL;
       const userBalanceSol = userBalance / LAMPORTS_PER_SOL;
 
-      console.log("Vault balance (SOL) lamports:", vaultBalanceSol);
-      console.log("User balance (SOL) lamports:", userBalanceSol);
-      console.log("ATA exists:", ataExists);
+      console.log({
+        vaultBalanceSol,
+        userBalanceSol,
+        ataExists,
+        ataAddress: ata.toBase58(),
+      });
 
       const needsInitialization =
         vaultBalanceSol < 0.002 || userBalanceSol < 0.001;
@@ -90,15 +104,27 @@ export function DepositModal() {
               throw new Error(errorData.error || "Failed to initialize vault");
             }
 
-            const { signature } = await response.json();
+            const data = await response.json();
+            console.log("Init response:", data);
+
+            if (!data.signature) {
+              throw new Error("No signature returned from initialization");
+            }
+
+            // Wait for initial confirmation
             await new Promise((resolve) => setTimeout(resolve, 1000));
+
             await solanaService.confirmTransactionWithRetry(
-              signature,
+              data.signature,
               "confirmed",
-              3
+              3,
+              30000
             );
 
+            // Additional verification wait
             await new Promise((resolve) => setTimeout(resolve, 2000));
+
+            // Verify ATA creation
             const verifyAta = await solanaService.getSolanaAccount(
               ata,
               "confirmed"
@@ -107,6 +133,7 @@ export function DepositModal() {
               console.log("Setup verified successfully");
               return { success: true, ata };
             }
+
             throw new Error("Setup verification failed");
           } catch (initError: unknown) {
             console.error(
@@ -114,6 +141,7 @@ export function DepositModal() {
               initError
             );
             initAttempts++;
+
             if (initAttempts === maxAttempts) {
               throw new Error(
                 initError instanceof Error
@@ -129,10 +157,10 @@ export function DepositModal() {
       return { success: true, ata };
     } catch (error: unknown) {
       console.error("Vault/ATA initialization error:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to initialize vault"
-      );
-      return { success: false, ata: null };
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to initialize vault";
+      toast.error(errorMessage);
+      return { success: false, ata: null, error: errorMessage };
     }
   };
 
@@ -230,7 +258,7 @@ export function DepositModal() {
 
   const initializeCoinbaseOnramp = async (ata: PublicKey, amount: number) => {
     if (!publicKey) {
-      throw new Error("Required addresses not available");
+      throw new Error("Wallet not connected");
     }
 
     const partnerUserId = `${publicKey
@@ -257,7 +285,7 @@ export function DepositModal() {
         setIsSubmitting(false);
       },
       onExit: () => {
-        console.error("Deposit process was exited");
+        console.log("Deposit process was exited");
         setIsSubmitting(false);
       },
       experienceLoggedIn: "popup",
@@ -283,25 +311,21 @@ export function DepositModal() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const data = new FormData(e.currentTarget);
-    const amount = parseFloat(data.get("amount") as string);
-
-    if (!publicKey) {
-      toast.error("Wallet not connected");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (amount < 1 || amount > 500) {
-      toast.error("Amount must be between $1 and $500");
-      setIsSubmitting(false);
-      return;
-    }
-
     try {
+      const data = new FormData(e.currentTarget);
+      const amount = parseFloat(data.get("amount") as string);
+
+      if (!publicKey) {
+        throw new Error("Wallet not connected");
+      }
+
+      if (amount < 1 || amount > 500) {
+        throw new Error("Amount must be between $1 and $500");
+      }
+
       const result = await checkVaultAndAtaStatus();
       if (!result.success || !result.ata) {
-        throw new Error("Failed to initialize vault");
+        throw new Error(result.error || "Failed to initialize vault");
       }
 
       await initializeCoinbaseOnramp(result.ata, amount);
@@ -309,6 +333,7 @@ export function DepositModal() {
       console.error("Deposit error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to deposit");
       setIsSubmitting(false);
+      setIsOpen(false);
     }
   };
 

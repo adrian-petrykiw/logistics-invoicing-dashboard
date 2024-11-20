@@ -42,10 +42,12 @@ export const useVendorDetails = (vendorId: string | null) => {
       const vendorPublicKey = new PublicKey(
         org.business_details.ownerWalletAddress
       );
-      const createKey = PublicKey.findProgramAddressSync(
-        [Buffer.from("squad"), vendorPublicKey.toBuffer()],
-        new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
-      )[0];
+      // const createKey = PublicKey.findProgramAddressSync(
+      //   [Buffer.from("squad"), vendorPublicKey.toBuffer()],
+      //   new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
+      // )[0];
+
+      const createKey = vendorPublicKey;
 
       const [multisigPda] = getMultisigPda({
         createKey: createKey,

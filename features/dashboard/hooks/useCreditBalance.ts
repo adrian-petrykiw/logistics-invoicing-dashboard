@@ -11,7 +11,7 @@ export function useCreditBalance(multisigPda: PublicKey | null) {
     queryFn: async () => {
       if (!multisigPda) return null;
 
-      // Get the credit vault PDA (using index 1 for credit vault)
+      // Get the credit vault PDA (using index 0 for credit vault)
       const [creditVaultPda] = multisig.getVaultPda({
         multisigPda,
         index: 0,
