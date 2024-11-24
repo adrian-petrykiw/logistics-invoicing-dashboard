@@ -11,6 +11,7 @@ import {
   Signer,
   Transaction,
   ComputeBudgetProgram,
+  TransactionMessage,
 } from "@solana/web3.js";
 import {
   getAccount,
@@ -354,34 +355,31 @@ export class SolanaService {
     }
   }
 
-  // Add this function near the top of your handleConfirm
+  // Add/update these methods in your SolanaService class
+
   async getPriorityFeeEstimate(
     transaction: Transaction,
-    feePayer: PublicKey
+    feePayer: PublicKey,
+    isAtomic: boolean = false
   ): Promise<number> {
     try {
       // Clone the transaction to avoid modifying the original
       const tempTx = new Transaction().add(...transaction.instructions);
-
-      // Set the actual fee payer
       tempTx.feePayer = feePayer;
 
-      // Get a recent blockhash
       const { blockhash } = await this.defaultConnection.getLatestBlockhash(
         "confirmed"
       );
       tempTx.recentBlockhash = blockhash;
 
-      const serializedTx = bs58.encode(
-        tempTx.serialize({
-          requireAllSignatures: false,
-          verifySignatures: false,
-        })
-      );
-
-      // Alternative approach: use accountKeys directly
+      // For atomic transactions, we need to include all account keys
       const message = tempTx.compileMessage();
       const accountKeys = message.accountKeys.map((key) => key.toBase58());
+
+      // Log account keys for debugging atomic transactions
+      if (isAtomic) {
+        console.log("Atomic transaction account keys:", accountKeys);
+      }
 
       const response = await fetch(process.env.NEXT_PUBLIC_SOLANA_RPC_URL!, {
         method: "POST",
@@ -392,7 +390,7 @@ export class SolanaService {
           method: "getPriorityFeeEstimate",
           params: [
             {
-              accountKeys, // Use the actual account keys instead of serialized transaction
+              accountKeys,
               options: {
                 priorityLevel: "High",
                 includeVote: false,
@@ -405,48 +403,394 @@ export class SolanaService {
       const data = await response.json();
       if (data.error) {
         console.error("Priority fee API error:", data.error);
-        return 50000; // Fallback fee if API returns error
+        return isAtomic ? 100000 : 50000; // Higher fallback for atomic txs
       }
 
       console.log("Priority fee estimate:", data.result.priorityFeeEstimate);
       return data.result.priorityFeeEstimate;
     } catch (error) {
       console.error("Failed to get priority fee estimate:", error);
-      return 50000; // Fallback priority fee in case of API error
+      return isAtomic ? 100000 : 50000; // Higher fallback for atomic txs
     }
   }
 
-  // Helper to add priority fee instruction to a transaction
   async addPriorityFee(
     transaction: Transaction,
-    feePayer: PublicKey
+    feePayer: PublicKey,
+    isAtomic: boolean = false
   ): Promise<Transaction> {
     const priorityFee = await this.getPriorityFeeEstimate(
       transaction,
-      feePayer
+      feePayer,
+      isAtomic
     );
+    console.log(`priorityFee in addPriorityFee is:`, priorityFee);
+
+    const computeUnits = await this.estimateComputeUnits(
+      transaction,
+      this.defaultConnection,
+      feePayer,
+      isAtomic
+    );
+    console.log(`computeUnits in addPriorityFee is:`, computeUnits);
 
     const modifiedTx = new Transaction();
+    modifiedTx.feePayer = feePayer;
 
-    // Add compute unit price instruction first
+    // Add compute unit instructions
     modifiedTx.add(
       ComputeBudgetProgram.setComputeUnitPrice({
         microLamports: priorityFee,
-      })
-    );
-
-    // Add compute unit limit instruction
-    modifiedTx.add(
+      }),
       ComputeBudgetProgram.setComputeUnitLimit({
-        units: 200000, // You can adjust this based on your needs
+        units: computeUnits,
       })
     );
 
-    // Add all original instructions
+    // Add original instructions and preserve feePayer
     transaction.instructions.forEach((ix) => modifiedTx.add(ix));
 
     return modifiedTx;
   }
+
+  async estimateComputeUnits(
+    transaction: Transaction,
+    connection: Connection,
+    feePayer: PublicKey,
+    isAtomic: boolean = false
+  ): Promise<number> {
+    try {
+      const simTx = new Transaction().add(...transaction.instructions);
+      simTx.feePayer = feePayer;
+
+      const { blockhash } = await connection.getLatestBlockhash("confirmed");
+      simTx.recentBlockhash = blockhash;
+
+      const messageV0 = new TransactionMessage({
+        payerKey: feePayer,
+        recentBlockhash: blockhash,
+        instructions: simTx.instructions,
+      }).compileToV0Message();
+
+      const versionedTx = new VersionedTransaction(messageV0);
+
+      const simulation = await connection.simulateTransaction(versionedTx, {
+        sigVerify: false,
+        replaceRecentBlockhash: true,
+        commitment: "confirmed",
+      });
+
+      if (simulation.value.err) {
+        console.warn("Transaction simulation failed:", simulation.value.err);
+        return this.getBaselineComputeUnits(transaction, isAtomic);
+      }
+
+      const unitsUsed = simulation.value.unitsConsumed || 0;
+      const bufferMultiplier = isAtomic ? 1.5 : 1.3; // Higher buffer for atomic txs
+      const estimatedUnits = Math.ceil(unitsUsed * bufferMultiplier);
+
+      const minUnits = isAtomic ? 300_000 : 200_000; // Higher minimum for atomic txs
+      const maxUnits = 1_400_000;
+
+      const baselineUnits = this.getBaselineComputeUnits(transaction, isAtomic);
+
+      const finalUnits = Math.max(
+        Math.min(Math.max(estimatedUnits, baselineUnits, minUnits), maxUnits),
+        minUnits
+      );
+
+      console.log({
+        isAtomic,
+        simulatedUnits: unitsUsed,
+        estimatedWithBuffer: estimatedUnits,
+        baselineEstimate: baselineUnits,
+        finalUnits,
+      });
+
+      return finalUnits;
+    } catch (error) {
+      console.error("Error estimating compute units:", error);
+      return this.getBaselineComputeUnits(transaction, isAtomic);
+    }
+  }
+
+  getBaselineComputeUnits(
+    transaction: Transaction,
+    isAtomic: boolean = false
+  ): number {
+    const instructionCounts = transaction.instructions.reduce(
+      (counts, ix) => {
+        if (
+          ix.programId.equals(
+            new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+          )
+        ) {
+          counts.splTokenOps++;
+        }
+        if (ix.data.length > 0) {
+          counts.memoSize += ix.data.length;
+        }
+        if (
+          ix.programId.equals(
+            new PublicKey("SMPLecH534NA9acpos4G6x7uf3LWbCAwZQE9e8ZekMu")
+          )
+        ) {
+          counts.squadsOps++;
+        }
+        return counts;
+      },
+      {
+        splTokenOps: 0,
+        memoSize: 0,
+        squadsOps: 0,
+      }
+    );
+
+    const baseUnits = isAtomic ? 300_000 : 200_000;
+    const splTokenUnits = instructionCounts.splTokenOps * 50_000;
+    const memoUnits = Math.ceil(instructionCounts.memoSize * 100);
+    const squadsUnits = instructionCounts.squadsOps * 75_000; // Additional units for Squads operations
+
+    return baseUnits + splTokenUnits + memoUnits + squadsUnits;
+  }
+
+  // async getPriorityFeeEstimate(
+  //   transaction: Transaction,
+  //   feePayer: PublicKey
+  // ): Promise<number> {
+  //   try {
+  //     // Clone the transaction to avoid modifying the original
+  //     const tempTx = new Transaction().add(...transaction.instructions);
+
+  //     // Set the actual fee payer
+  //     tempTx.feePayer = feePayer;
+
+  //     // Get a recent blockhash
+  //     const { blockhash } = await this.defaultConnection.getLatestBlockhash(
+  //       "confirmed"
+  //     );
+  //     tempTx.recentBlockhash = blockhash;
+
+  //     // const serializedTx = bs58.encode(
+  //     //   tempTx.serialize({
+  //     //     requireAllSignatures: false,
+  //     //     verifySignatures: false,
+  //     //   })
+  //     // );
+
+  //     // console.log(
+  //     //   "serializedTx with priority fee: ",
+  //     //   tempTx.serializeMessage().toString("base64")
+  //     // );
+
+  //     // Alternative approach: use accountKeys directly
+  //     const message = tempTx.compileMessage();
+  //     const accountKeys = message.accountKeys.map((key) => key.toBase58());
+
+  //     const response = await fetch(process.env.NEXT_PUBLIC_SOLANA_RPC_URL!, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({
+  //         jsonrpc: "2.0",
+  //         id: "helius-priority-fee",
+  //         method: "getPriorityFeeEstimate",
+  //         params: [
+  //           {
+  //             accountKeys, // Use the actual account keys instead of serialized transaction
+  //             options: {
+  //               priorityLevel: "High",
+  //               includeVote: false,
+  //             },
+  //           },
+  //         ],
+  //       }),
+  //     });
+  //     const data = await response.json();
+  //     if (data.error) {
+  //       console.error("Priority fee API error:", data.error);
+  //       return 50000; // Fallback fee if API returns error
+  //     }
+
+  //     console.log("Priority fee estimate:", data.result.priorityFeeEstimate);
+  //     return data.result.priorityFeeEstimate;
+  //   } catch (error) {
+  //     console.error("Failed to get priority fee estimate:", error);
+  //     return 50000; // Fallback priority fee in case of API error
+  //   }
+  // }
+
+  // async addPriorityFee(
+  //   transaction: Transaction,
+  //   feePayer: PublicKey
+  // ): Promise<Transaction> {
+  //   const priorityFee = await this.getPriorityFeeEstimate(
+  //     transaction,
+  //     feePayer
+  //   );
+  //   console.log("priorityFee in addPriorityFee is:", priorityFee);
+
+  //   const computeUnits = await this.estimateComputeUnits(
+  //     transaction,
+  //     this.defaultConnection,
+  //     feePayer
+  //   );
+  //   console.log("computeUnits in addPriorityFee is:", computeUnits);
+
+  //   const modifiedTx = new Transaction();
+
+  //   // Add compute unit price instruction first
+  //   modifiedTx.add(
+  //     ComputeBudgetProgram.setComputeUnitPrice({
+  //       microLamports: priorityFee,
+  //     })
+  //   );
+
+  //   // Add compute unit limit instruction with dynamic estimation
+  //   modifiedTx.add(
+  //     ComputeBudgetProgram.setComputeUnitLimit({
+  //       units: computeUnits,
+  //     })
+  //   );
+
+  //   // Add all original instructions
+  //   transaction.instructions.forEach((ix) => modifiedTx.add(ix));
+
+  //   return modifiedTx;
+  // }
+
+  // async estimateComputeUnits(
+  //   transaction: Transaction,
+  //   connection: Connection,
+  //   feePayer: PublicKey
+  // ): Promise<number> {
+  //   try {
+  //     // Create a new Transaction with the original instructions
+  //     const simTx = new Transaction().add(...transaction.instructions);
+  //     simTx.feePayer = feePayer;
+
+  //     // Get recent blockhash for simulation
+  //     const { blockhash, lastValidBlockHeight } =
+  //       await connection.getLatestBlockhash("confirmed");
+  //     simTx.recentBlockhash = blockhash;
+
+  //     // Convert to VersionedTransaction
+  //     const messageV0 = new TransactionMessage({
+  //       payerKey: feePayer,
+  //       recentBlockhash: blockhash,
+  //       instructions: simTx.instructions,
+  //     }).compileToV0Message();
+
+  //     const versionedTx = new VersionedTransaction(messageV0);
+
+  //     // Simulate the transaction with the new method
+  //     const simulation = await connection.simulateTransaction(versionedTx, {
+  //       sigVerify: false,
+  //       replaceRecentBlockhash: true,
+  //       commitment: "confirmed",
+  //     });
+
+  //     if (simulation.value.err) {
+  //       console.warn("Transaction simulation failed:", simulation.value.err);
+  //       return this.getBaselineComputeUnits(transaction);
+  //     }
+
+  //     // Extract compute units consumed from simulation
+  //     const unitsUsed = simulation.value.unitsConsumed || 0;
+
+  //     // Add a 30% buffer for safety
+  //     const estimatedUnits = Math.ceil(unitsUsed * 1.3);
+
+  //     // Enforce minimum and maximum limits
+  //     const minUnits = 200_000; // Minimum for most basic transactions
+  //     const maxUnits = 1_400_000; // Maximum allowed by Solana
+
+  //     // Baseline estimates for common operations
+  //     const baselineUnits = this.getBaselineComputeUnits(transaction);
+
+  //     // Take the maximum of our different estimates
+  //     const finalUnits = Math.max(
+  //       Math.min(Math.max(estimatedUnits, baselineUnits, minUnits), maxUnits),
+  //       minUnits
+  //     );
+
+  //     console.log({
+  //       simulatedUnits: unitsUsed,
+  //       estimatedWithBuffer: estimatedUnits,
+  //       baselineEstimate: baselineUnits,
+  //       finalUnits,
+  //     });
+
+  //     return finalUnits;
+  //   } catch (error) {
+  //     console.error("Error estimating compute units:", error);
+  //     // Fallback to baseline estimation if simulation fails
+  //     return this.getBaselineComputeUnits(transaction);
+  //   }
+  // }
+
+  // getBaselineComputeUnits(transaction: Transaction): number {
+  //   // Count different types of instructions
+  //   const instructionCounts = transaction.instructions.reduce(
+  //     (counts, ix) => {
+  //       // Check for common instruction types
+  //       if (
+  //         ix.programId.equals(
+  //           new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+  //         )
+  //       ) {
+  //         // SPL Token Program
+  //         counts.splTokenOps++;
+  //       }
+  //       if (ix.data.length > 0) {
+  //         // Roughly estimate memo size
+  //         counts.memoSize += ix.data.length;
+  //       }
+  //       return counts;
+  //     },
+  //     {
+  //       splTokenOps: 0,
+  //       memoSize: 0,
+  //     }
+  //   );
+
+  //   // Base computation for different operations
+  //   const baseUnits = 200_000; // Base units for simple transactions
+  //   const splTokenUnits = instructionCounts.splTokenOps * 50_000; // Additional units per SPL token operation
+  //   const memoUnits = Math.ceil(instructionCounts.memoSize * 100); // Units for memo data
+
+  //   return baseUnits + splTokenUnits + memoUnits;
+  // }
+
+  // async addPriorityFee(
+  //   transaction: Transaction,
+  //   feePayer: PublicKey
+  // ): Promise<Transaction> {
+  //   const priorityFee = await this.getPriorityFeeEstimate(
+  //     transaction,
+  //     feePayer
+  //   );
+
+  //   const modifiedTx = new Transaction();
+
+  //   // Add compute unit price instruction first
+  //   modifiedTx.add(
+  //     ComputeBudgetProgram.setComputeUnitPrice({
+  //       microLamports: priorityFee,
+  //     })
+  //   );
+
+  //   // Add compute unit limit instruction
+  //   modifiedTx.add(
+  //     ComputeBudgetProgram.setComputeUnitLimit({
+  //       units: 200000, // You can adjust this based on your needs
+  //     })
+  //   );
+
+  //   // Add all original instructions
+  //   transaction.instructions.forEach((ix) => modifiedTx.add(ix));
+
+  //   return modifiedTx;
+  // }
 }
 
 // Export singleton instance

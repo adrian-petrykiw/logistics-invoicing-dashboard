@@ -21,6 +21,7 @@ import toast from "react-hot-toast";
 import {
   accounts,
   getMultisigPda,
+  getTransactionPda,
   getVaultPda,
   instructions,
   PROGRAM_ID,
@@ -48,6 +49,11 @@ import {
 import { solanaService } from "@/services/solana";
 import transactions from "@/pages/api/transactions";
 import { CreateTransactionDTO } from "@/types/transaction";
+import {
+  getAccountsForExecuteCore,
+  transactionMessageToVaultMessage,
+  vaultTransactionExecuteSync,
+} from "@/utils/squads";
 
 const heliusConnection = new Connection(
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL!,
@@ -174,6 +180,397 @@ export function Confirmation({
     isLoading: orgLoading,
     createOrganization,
   } = useOrganization(publicKey?.toBase58() || "");
+
+  const handleAtomicConfirm = async () => {
+    // Encryption helper
+    const encryptPaymentData = (data: any) => {
+      const key = randomBytes(32);
+      const iv = randomBytes(16);
+      const cipher = createCipheriv("aes-256-cbc", key, iv);
+      let encrypted = cipher.update(JSON.stringify(data), "utf8", "hex");
+      encrypted += cipher.final("hex");
+      return {
+        encrypted: iv.toString("hex") + ":" + encrypted,
+        key: key.toString("hex"),
+      };
+    };
+
+    try {
+      if (!publicKey || !signTransaction || !apiUser) {
+        toast.error("Please connect your wallet");
+        return;
+      }
+
+      setIsVendorLoading(true);
+      console.log("Starting atomic confirmation with vendor data:", vendorData);
+      setStatus("encrypting");
+
+      // Helper function for size estimation
+      const estimateInstructionSize = (
+        instruction: TransactionInstruction
+      ): number => {
+        let size = 100; // Base size for metadata
+        size += instruction.data.length;
+        size += instruction.keys.length * 32; // 32 bytes per pubkey
+        return size;
+      };
+
+      const encryptionKeys: Record<string, string> = {};
+      const paymentHashes: Record<string, string> = {};
+
+      // Get PDAs and account info
+      const senderMultisigPda = new PublicKey(
+        `${organization?.multisig_wallet}`
+      );
+      console.log("Sender multisig PDA:", senderMultisigPda.toString());
+
+      const [senderVaultPda] = getVaultPda({
+        multisigPda: senderMultisigPda,
+        index: 0,
+      });
+      console.log("Sender vault PDA:", senderVaultPda.toString());
+
+      let senderMultisigInfo;
+      try {
+        senderMultisigInfo = await accounts.Multisig.fromAccountAddress(
+          heliusConnection,
+          senderMultisigPda
+        );
+        console.log("Found sender's multisig:", {
+          threshold: senderMultisigInfo.threshold.toString(),
+          transactionIndex: senderMultisigInfo.transactionIndex.toString(),
+        });
+      } catch (err) {
+        console.error("Failed to find sender's multisig account:", err);
+        throw new Error("Sender's multisig account not found");
+      }
+
+      // Get USDC ATAs
+      const senderUsdcAta = await getAssociatedTokenAddress(
+        USDC_MINT,
+        senderVaultPda,
+        true,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+      console.log("Sender vault USDC ATA:", senderUsdcAta.toString());
+
+      // Fetch vendor details
+      setStatus("creating");
+      console.log("Fetching vendor details for:", vendorData.vendor);
+      const headers = getAuthHeaders(apiUser);
+      const vendorInfo = await TransactionService.fetchVendorDetails(
+        vendorData.vendor,
+        headers
+      );
+      console.log("Received vendor info:", vendorInfo);
+
+      const receiverVaultPda = new PublicKey(vendorInfo.vaultAddress);
+      const receiverUsdcAta = await getAssociatedTokenAddress(
+        USDC_MINT,
+        receiverVaultPda,
+        true,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+      console.log("receiverUsdcAta: ", receiverUsdcAta);
+
+      // Process each invoice
+      for (const invoice of vendorData.invoices) {
+        console.log(
+          `Processing atomic transaction for invoice ${invoice.number}`
+        );
+
+        // Create and encrypt invoice data
+        const invoiceData = {
+          invoice: {
+            number: invoice.number,
+            amount: invoice.amount,
+          },
+          vendor: vendorData.vendor,
+          paymentMethod: paymentData.paymentMethod,
+          timestamp: Date.now(),
+        };
+
+        const { encrypted: encryptedData, key: encryptionKey } =
+          encryptPaymentData(invoiceData);
+        encryptionKeys[invoice.number] = encryptionKey;
+        paymentHashes[invoice.number] = createHash("sha256")
+          .update(JSON.stringify(invoiceData))
+          .digest("hex");
+
+        // Create base instructions
+        const transferIx = createTransferInstruction(
+          senderUsdcAta,
+          receiverUsdcAta,
+          senderVaultPda,
+          BigInt(Math.round(invoice.amount * 1e6))
+        );
+
+        // Create optimized memo data
+        const memoData = {
+          d: encryptedData,
+          h: paymentHashes[invoice.number],
+          v: "1.0",
+          i: invoice.number,
+        };
+
+        const memoIx = new TransactionInstruction({
+          keys: [],
+          programId: new PublicKey(
+            "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+          ),
+          data: Buffer.from(JSON.stringify(memoData)),
+        });
+
+        // Get next transaction index
+        const currentTransactionIndex = Number(
+          senderMultisigInfo.transactionIndex
+        );
+        const newTransactionIndex = BigInt(currentTransactionIndex + 1);
+        console.log("Using transaction index:", newTransactionIndex.toString());
+
+        // Create transaction message for transfer
+        const transferMessage = new TransactionMessage({
+          payerKey: senderVaultPda,
+          recentBlockhash: (await heliusConnection.getLatestBlockhash())
+            .blockhash,
+          instructions: [transferIx, memoIx],
+        });
+
+        console.log("Compiling vault message...");
+        const compiledMessage = transactionMessageToVaultMessage({
+          message: transferMessage,
+          addressLookupTableAccounts: [],
+          vaultPda: senderVaultPda,
+        });
+
+        // Get transaction PDA and accounts for execution
+        const [transactionPda] = getTransactionPda({
+          multisigPda: senderMultisigPda,
+          index: newTransactionIndex,
+        });
+
+        console.log("Getting execution accounts...");
+        const { accountMetas } = await getAccountsForExecuteCore({
+          connection: heliusConnection,
+          multisigPda: senderMultisigPda,
+          message: compiledMessage,
+          ephemeralSignerBumps: [0],
+          vaultIndex: 0,
+          transactionPda,
+          programId: PROGRAM_ID,
+        });
+
+        // Build instructions
+        console.log("Creating transaction instructions...");
+        const createIx = instructions.vaultTransactionCreate({
+          multisigPda: senderMultisigPda,
+          transactionIndex: newTransactionIndex,
+          creator: publicKey,
+          vaultIndex: 0,
+          ephemeralSigners: 0,
+          transactionMessage: transferMessage,
+          memo: `TX-${invoice.number}`,
+        });
+
+        const proposeIx = instructions.proposalCreate({
+          multisigPda: senderMultisigPda,
+          transactionIndex: newTransactionIndex,
+          creator: publicKey,
+        });
+
+        const approveIx = instructions.proposalApprove({
+          multisigPda: senderMultisigPda,
+          transactionIndex: newTransactionIndex,
+          member: publicKey,
+        });
+
+        const { instruction: executeIx } = vaultTransactionExecuteSync({
+          multisigPda: senderMultisigPda,
+          transactionIndex: newTransactionIndex,
+          member: publicKey,
+          accountsForExecute: accountMetas,
+          programId: PROGRAM_ID,
+        });
+
+        const allInstructions = [
+          transferIx,
+          memoIx,
+          createIx,
+          proposeIx,
+          approveIx,
+          executeIx,
+        ];
+
+        // Log sizes for debugging
+        const instructionSizes = allInstructions.map((ix, index) => ({
+          instruction: index,
+          size: estimateInstructionSize(ix),
+        }));
+        console.log("Instruction sizes:", instructionSizes);
+
+        const totalSize = allInstructions.reduce(
+          (size, ix) => size + estimateInstructionSize(ix),
+          150
+        );
+        console.log("Total transaction size:", totalSize);
+
+        let transactions: Transaction[];
+        let isAtomic: boolean;
+
+        if (totalSize > 1232) {
+          console.log(
+            "Transaction size exceeds limit, splitting into multiple transactions"
+          );
+
+          // First transaction: Create
+          const createTx = new Transaction();
+          createTx.feePayer = publicKey;
+          createTx.add(createIx);
+
+          // Second transaction: Propose + Approve + Execute
+          const executeTx = new Transaction();
+          executeTx.feePayer = publicKey;
+          executeTx.add(proposeIx, approveIx, executeIx);
+
+          transactions = [createTx, executeTx];
+          isAtomic = false;
+        } else {
+          const atomicTx = new Transaction();
+          atomicTx.feePayer = publicKey;
+          atomicTx.add(createIx, proposeIx, approveIx, executeIx);
+          transactions = [atomicTx];
+          isAtomic = true;
+        }
+
+        // Send transaction(s)
+        setStatus("confirming");
+        for (const [index, tx] of transactions.entries()) {
+          try {
+            const latestBlockhash = await heliusConnection.getLatestBlockhash(
+              "confirmed"
+            );
+
+            // Get the correct feePayer for the current transaction
+            // const feePayer = index === 0 ? senderVaultPda : publicKey;
+            if (!tx.feePayer) {
+              throw new Error("Missing feePayer for transaction");
+            }
+
+            // Add priority fees with correct payer
+            const processedTx = await solanaService.addPriorityFee(
+              tx,
+              tx.feePayer,
+              isAtomic
+            );
+            processedTx.recentBlockhash = latestBlockhash.blockhash;
+
+            console.log(
+              `Signing ${
+                isAtomic
+                  ? "atomic"
+                  : `split (${index + 1}/${transactions.length})`
+              } transaction...`
+            );
+
+            const signedTx = await signTransaction(processedTx);
+
+            console.log("Sending transaction...");
+            const signature = await heliusConnection.sendRawTransaction(
+              signedTx.serialize(),
+              {
+                skipPreflight: true,
+                preflightCommitment: "confirmed",
+                maxRetries: 3,
+              }
+            );
+
+            const status = await solanaService.confirmTransactionWithRetry(
+              signature,
+              "confirmed",
+              10,
+              60000,
+              heliusConnection
+            );
+
+            if (!status || status.err) {
+              throw new Error(
+                `Transaction failed: ${
+                  status ? JSON.stringify(status.err) : "No status returned"
+                }`
+              );
+            }
+
+            console.log(`Transaction ${index + 1} confirmed:`, signature);
+
+            // Add waits between split transactions
+            if (!isAtomic && index < transactions.length - 1) {
+              console.log(
+                `Waiting 15 seconds after transaction ${index + 1}...`
+              );
+              await new Promise((resolve) => setTimeout(resolve, 15000));
+            }
+
+            // Store transaction data after final transaction
+            if (isAtomic || index === transactions.length - 1) {
+              const transactionData: CreateTransactionDTO = {
+                organization_id: organization?.id!,
+                signature,
+                token_mint: USDC_MINT.toString(),
+                proof_data: {
+                  encryption_keys: {
+                    [invoice.number]: encryptionKeys[invoice.number],
+                  },
+                  payment_hashes: {
+                    [invoice.number]: paymentHashes[invoice.number],
+                  },
+                },
+                amount: invoice.amount,
+                transaction_type: "payment",
+                sender: {
+                  multisig_address: senderMultisigPda.toString(),
+                  vault_address: senderVaultPda.toString(),
+                  wallet_address: publicKey.toString(),
+                },
+                recipient: {
+                  multisig_address: vendorInfo.multisigAddress,
+                  vault_address: vendorInfo.vaultAddress,
+                },
+                invoices: [{ number: invoice.number, amount: invoice.amount }],
+              };
+
+              const response = await fetch("/api/transactions/store", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...headers,
+                },
+                body: JSON.stringify(transactionData),
+              });
+
+              if (!response.ok) {
+                throw new Error("Failed to store transaction record");
+              }
+            }
+          } catch (error) {
+            console.error(`Transaction ${index + 1} failed:`, error);
+            throw error;
+          }
+        }
+      }
+
+      setStatus("confirmed");
+    } catch (error) {
+      console.error("Transaction failed:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Transaction failed"
+      );
+      setStatus("initial");
+    } finally {
+      setIsVendorLoading(false);
+    }
+  };
 
   const handleConfirm = async () => {
     try {
@@ -933,7 +1330,7 @@ export function Confirmation({
             Back
           </Button>
           <Button
-            onClick={handleConfirm}
+            onClick={handleAtomicConfirm}
             className="flex-1"
             disabled={!publicKey || isVendorLoading || isLoading}
           >

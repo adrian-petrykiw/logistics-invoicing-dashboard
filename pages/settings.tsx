@@ -73,7 +73,14 @@ const EditMemberModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent
+        onPointerDownOutside={(e) => {
+          e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Edit Team Member</DialogTitle>
         </DialogHeader>
@@ -397,7 +404,14 @@ export default function SettingsPage() {
                             <FiPlus className="mr-[4px]" /> Add Member
                           </button> */}
                         </DialogTrigger>
-                        <DialogContent>
+                        <DialogContent
+                          onPointerDownOutside={(e) => {
+                            e.preventDefault();
+                          }}
+                          onEscapeKeyDown={(e) => {
+                            e.preventDefault();
+                          }}
+                        >
                           <DialogHeader>
                             <DialogTitle>Add Member</DialogTitle>
                           </DialogHeader>

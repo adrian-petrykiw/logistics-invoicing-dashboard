@@ -411,7 +411,7 @@ export function VendorRegistrationModal({
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
-        if (!formDisabled) {
+        if (!formDisabled && !open) {
           onOpenChange(open);
           if (!open) resetState();
         }
@@ -429,6 +429,9 @@ export function VendorRegistrationModal({
         onPointerDownOutside={(e) => {
           e.preventDefault();
           if (formDisabled) return;
+        }}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
         }}
       >
         <DialogHeader>

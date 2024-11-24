@@ -123,8 +123,23 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
       : ((step + 1) / steps.length) * 100;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleClose();
+        }
+      }}
+    >
+      <DialogContent
+        className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col"
+        onPointerDownOutside={(e) => {
+          e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+        }}
+      >
         <div className="p-6 pb-0">
           <DialogHeader>
             <DialogTitle className="text-2xl">Create Transaction</DialogTitle>
