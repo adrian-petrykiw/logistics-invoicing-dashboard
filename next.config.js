@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   reactStrictMode: true,
-  output: "standalone", // Important for containerized deployments
   experimental: {
     serverActions: true,
   },
@@ -14,8 +14,25 @@ const nextConfig = {
         tls: false,
       };
     }
-    config.ignoreWarnings = [{ module: /node_modules\/punycode/ }];
+    config.ignoreWarnings = [
+      { module: /node_modules\/punycode/ },
+      { message: /Critical dependency/ },
+    ];
     return config;
+  },
+  // Add headers if needed
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "X-Frame-Options",
+            value: "DENY",
+          },
+        ],
+      },
+    ];
   },
 };
 
