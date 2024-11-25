@@ -4,23 +4,28 @@ FROM --platform=linux/amd64 node:20-slim
 # Set the working directory inside the container
 WORKDIR /app
 
-# Copy the package.json and package-lock.json files
+# Copy package files first for better caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install --legacy-peer-deps
+# Install dependencies with specific npm settings for Cloud Run
+RUN npm install --legacy-peer-deps --production=false
 
 # Copy the rest of the application files
 COPY . .
 
+# Set environment variables for Next.js
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+
 # Build the Next.js app
 RUN npm run build
 
-# Expose port 3000 for the application
-EXPOSE 3000
+# Remove development dependencies
+RUN npm prune --production
 
-# Set the environment variable for production
-ENV NODE_ENV=production
+# Expose port for Cloud Run
+ENV PORT 8080
+EXPOSE 8080
 
-# Start the Next.js application
-CMD ["npm", "start"]
+# Update start command to use the PORT environment variable
+CMD ["sh", "-c", "npm start -- -p ${PORT}"]
