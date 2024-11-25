@@ -16,20 +16,6 @@ const nextConfig = {
     ];
     return config;
   },
-  // // Add headers if needed
-  // async headers() {
-  //   return [
-  //     {
-  //       source: "/:path*",
-  //       headers: [
-  //         {
-  //           key: "X-Frame-Options",
-  //           value: "DENY",
-  //         },
-  //       ],
-  //     },
-  //   ];
-  // },
 };
 
 module.exports = nextConfig;

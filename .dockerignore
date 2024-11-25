@@ -14,11 +14,6 @@ coverage
 # Development/IDE files
 .git
 .gitignore
-.env*
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 .vscode
 .idea
 

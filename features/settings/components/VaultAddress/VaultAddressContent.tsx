@@ -7,12 +7,14 @@ interface VaultAddressProps {
   multisigWallet: string;
 }
 
-export const VaultAddress = ({ multisigWallet }: VaultAddressProps) => {
+export default function VaultAddressContent({
+  multisigWallet,
+}: VaultAddressProps) {
   const [vaultAddress, setVaultAddress] = useState<string>("");
   const isBrowser = typeof window !== "undefined";
 
   useEffect(() => {
-    if (!isBrowser) return; // Skip in SSR
+    if (!isBrowser) return;
 
     if (multisigWallet) {
       try {
@@ -41,9 +43,4 @@ export const VaultAddress = ({ multisigWallet }: VaultAddressProps) => {
       />
     </div>
   );
-};
-
-// Optional: Create an index.ts file in the settings folder for cleaner imports
-// components/settings/index.ts
-export * from "./EditMemberModal";
-export * from "./VaultAddress";
+}
