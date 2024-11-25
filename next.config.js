@@ -2,9 +2,9 @@
 const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
-  experimental: {
-    serverActions: true,
-  },
+  // experimental: {
+  //   serverActions: true,
+  // },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
