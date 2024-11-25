@@ -19,6 +19,11 @@ export function TransactionStatus({
     }
   }, [currentStatus]);
 
+  const handleDone = () => {
+    setShowDone(false);
+    onDone();
+  };
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -49,7 +54,7 @@ export function TransactionStatus({
                 </span>
               </div>
               <button
-                onClick={onDone}
+                onClick={handleDone} // Update to use handleDone
                 className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
               >
                 Done
@@ -86,7 +91,7 @@ function StatusItem({
           {title}
         </span>
         {isActive ? (
-          <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+          <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
         ) : isDone ? (
           <Check className="h-5 w-5 text-green-500" />
         ) : null}

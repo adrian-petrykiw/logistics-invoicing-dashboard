@@ -14,6 +14,7 @@ import { useRouter } from "next/router";
 import { PaymentDetailsFormValues } from "@/schemas/paymentdetails";
 import { CombinedFormValues } from "@/schemas/combinedform";
 import { VendorListItem } from "@/types/vendor";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface CreateTransactionModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
     useState<CombinedFormValues | null>(null);
   const [paymentFormData, setPaymentFormData] = useState<any>(null);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const {
     data: vendors = [],
@@ -58,6 +60,19 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
     setStep(0);
     setVendorFormData(null);
     setPaymentFormData(null);
+  };
+
+  const handleTransactionComplete = async () => {
+    // Invalidate and refetch balance queries
+    await queryClient.invalidateQueries({
+      queryKey: ["multisigBalance"],
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ["currency-conversion"],
+    });
+
+    // Reset modal state and close
+    handleClose();
   };
 
   const handleVendorSubmit = (data: CombinedFormValues) => {
@@ -108,7 +123,7 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
       title: "3. Confirmation",
       component: (
         <Confirmation
-          onClose={onClose}
+          onClose={handleTransactionComplete}
           onBack={handleBack}
           vendorData={vendorFormData!}
           paymentData={paymentFormData}
