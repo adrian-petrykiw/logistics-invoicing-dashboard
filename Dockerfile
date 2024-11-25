@@ -13,6 +13,9 @@ RUN npm install --legacy-peer-deps
 # Copy the rest of the application files
 COPY . .
 
+# Set a default RPC URL for build time
+ENV NEXT_PUBLIC_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+
 # Build the Next.js app
 RUN npm run build
 

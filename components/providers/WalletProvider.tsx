@@ -11,18 +11,6 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 import toast from "react-hot-toast";
 
 const WalletProviderComponent: FC<PropsWithChildren> = ({ children }) => {
-  // const network = WalletAdapterNetwork.Mainnet;
-  // const endpoint = useMemo(() => clusterApiUrl(network), [network]);
-
-  // const endpoint = useMemo(() => {
-  //   if (typeof window === "undefined") {
-  //     return "https://api.mainnet-beta.solana.com";
-  //   }
-  //   return (
-  //     process.env.NEXT_PUBLIC_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com"
-  //   );
-  // }, []);
-
   const endpoint =
     process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
     "https://api.mainnet-beta.solana.com";
