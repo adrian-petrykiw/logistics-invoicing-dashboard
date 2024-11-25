@@ -22,18 +22,11 @@ import bs58 from "bs58";
 
 export class SolanaService {
   private static instance: SolanaService;
-  private defaultConnection: Connection;
+  private _connection: Connection | null = null;
 
-  constructor() {
-    if (!process.env.NEXT_PUBLIC_SOLANA_RPC_URL) {
-      throw new Error("SOLANA_RPC_URL environment variable is not set");
-    }
-    this.defaultConnection = new Connection(
-      process.env.NEXT_PUBLIC_SOLANA_RPC_URL!,
-      {
-        commitment: "confirmed",
-      }
-    );
+  private constructor() {
+    // Do not initialize connection in constructor
+    // We'll initialize it lazily when needed
   }
 
   public static getInstance(): SolanaService {
@@ -43,8 +36,28 @@ export class SolanaService {
     return SolanaService.instance;
   }
 
-  public getConnection(): Connection {
-    return this.defaultConnection;
+  private initConnection(): Connection {
+    // If we already have a connection, return it
+    if (this._connection) return this._connection;
+
+    const rpcUrl =
+      typeof window === "undefined"
+        ? process.env.SOLANA_RPC_URL // Server-side
+        : process.env.NEXT_PUBLIC_SOLANA_RPC_URL; // Client-side
+
+    if (!rpcUrl) {
+      throw new Error("Solana RPC URL not configured");
+    }
+
+    this._connection = new Connection(rpcUrl, {
+      commitment: "confirmed",
+    });
+
+    return this._connection;
+  }
+
+  public get connection(): Connection {
+    return this.initConnection();
   }
 
   async confirmTransactionWithRetry(
@@ -54,7 +67,7 @@ export class SolanaService {
     timeoutMs: number = 60000,
     connection?: Connection
   ): Promise<SignatureStatus | null> {
-    const conn = connection || this.defaultConnection;
+    const conn = connection || this.connection;
     const startTime = Date.now();
     let retryCount = 0;
 
@@ -112,7 +125,7 @@ export class SolanaService {
   async sendAndConfirmTransaction(
     transaction: Transaction | VersionedTransaction,
     signers: Array<Signer>,
-    connection: Connection = this.defaultConnection,
+    connection: Connection = this.connection,
     options: {
       commitment?: Commitment;
       maxRetries?: number;
@@ -163,7 +176,7 @@ export class SolanaService {
 
   async sendAndConfirmEncodedTransaction(
     rawTransaction: string | Buffer,
-    connection: Connection = this.defaultConnection,
+    connection: Connection = this.connection,
     options: {
       commitment?: Commitment;
       maxRetries?: number;
@@ -206,7 +219,7 @@ export class SolanaService {
 
   async sendAndConfirmRawTransaction(
     rawTransaction: Buffer,
-    connection: Connection = this.defaultConnection,
+    connection: Connection = this.connection,
     options: {
       commitment?: Commitment;
       maxRetries?: number;
@@ -254,7 +267,7 @@ export class SolanaService {
     try {
       console.log(`Getting token account ${publicKey.toBase58()}`);
       const tokenAccount = await getAccount(
-        this.defaultConnection,
+        this.connection,
         publicKey,
         commitment
       );
@@ -275,7 +288,7 @@ export class SolanaService {
         try {
           console.log(`Retry attempt ${attempt} for token account`);
           const tokenAccount = await getAccount(
-            this.defaultConnection,
+            this.connection,
             publicKey,
             commitment
           );
@@ -311,7 +324,7 @@ export class SolanaService {
         console.log(
           `Attempt ${i + 1} to get account info for ${publicKey.toBase58()}`
         );
-        const accountInfo = await this.defaultConnection.getAccountInfo(
+        const accountInfo = await this.connection.getAccountInfo(
           publicKey,
           commitment
         );
@@ -348,7 +361,7 @@ export class SolanaService {
     const publicKey =
       typeof address === "string" ? new PublicKey(address) : address;
     try {
-      return await this.defaultConnection.getBalance(publicKey, commitment);
+      return await this.connection.getBalance(publicKey, commitment);
     } catch (error) {
       console.error("Error fetching balance:", error);
       throw error;
@@ -367,7 +380,7 @@ export class SolanaService {
       const tempTx = new Transaction().add(...transaction.instructions);
       tempTx.feePayer = feePayer;
 
-      const { blockhash } = await this.defaultConnection.getLatestBlockhash(
+      const { blockhash } = await this.connection.getLatestBlockhash(
         "confirmed"
       );
       tempTx.recentBlockhash = blockhash;
@@ -428,7 +441,7 @@ export class SolanaService {
 
     const computeUnits = await this.estimateComputeUnits(
       transaction,
-      this.defaultConnection,
+      this.connection,
       feePayer,
       isAtomic
     );
@@ -795,6 +808,3 @@ export class SolanaService {
 
 // Export singleton instance
 export const solanaService = SolanaService.getInstance();
-
-// Also export Connection type for convenience
-export type { Connection };

@@ -1,7 +1,7 @@
 // hooks/useApi.ts
 import { useCallback } from "react";
 import type { AxiosRequestConfig } from "axios";
-import { api } from "@/lib/api";
+import { api } from "@/utils/api";
 import type { AuthUser } from "@/types/auth";
 
 export type ApiUser = {

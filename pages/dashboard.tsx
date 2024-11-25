@@ -4,15 +4,27 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { FiPlus, FiUsers, FiActivity, FiGrid } from "react-icons/fi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-// import { useSquadsWallet } from "@/features/dashboard/hooks/useSquadsWallet";
-import { CreateTransactionModal } from "@/features/dashboard/components/CreateTransactionModal/index";
-import { CurrentBalanceCard } from "@/features/dashboard/components/CurrentBalanceCard";
-import {
-  YieldPeriod,
-  YieldPeriodSelect,
-} from "@/features/dashboard/components/YieldPeriodSelect";
+import { YieldPeriod } from "@/features/dashboard/components/YieldPeriodSelect";
 import { useAuth } from "@/hooks/useAuth";
 import { useAuthContext } from "@/components/providers/AuthProvider";
+import dynamic from "next/dynamic";
+import { CurrentBalanceCard } from "@/features/dashboard/components/CurrentBalanceCard";
+
+// Dynamic imports for components that use Solana
+const CreateTransactionModal = dynamic(
+  () =>
+    import("@/features/dashboard/components/CreateTransactionModal").then(
+      (mod) => mod.CreateTransactionModal
+    ),
+  { ssr: false }
+);
+const YieldPeriodSelect = dynamic(
+  () =>
+    import("@/features/dashboard/components/YieldPeriodSelect").then(
+      (mod) => mod.YieldPeriodSelect
+    ),
+  { ssr: false }
+);
 
 export default function DashboardPage() {
   const [yieldPeriod, setYieldPeriod] = useState<YieldPeriod>("ytd");

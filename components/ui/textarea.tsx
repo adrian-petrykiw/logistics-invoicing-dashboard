@@ -1,6 +1,6 @@
 // components/ui/textarea.tsx
 import * as React from "react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils/styling";
 
 export interface TextareaProps
   extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}

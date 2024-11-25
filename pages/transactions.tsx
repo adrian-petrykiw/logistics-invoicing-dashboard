@@ -16,8 +16,8 @@ import {
 } from "@/components/ui/table";
 import { useTransactions } from "@/features/transactions/hooks/useTransactions";
 import { useAuthContext } from "@/components/providers/AuthProvider";
-import { formatDate } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils/styling";
+import { formatDate } from "@/utils/format";
 
 export default function TransactionsPage() {
   const router = useRouter();

@@ -1,8 +1,8 @@
+// features/dashboard/components/CurrentBalanceCard/CurrentBalanceContent.tsx
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useState } from "react";
-import { cn } from "@/lib/utils";
 import { CurrencySelect } from "@/components/CurrencySelect";
 import { useCurrencyConversion } from "@/hooks/useCurrency";
 import { SupportedCurrency } from "@/types/currency";
@@ -11,9 +11,10 @@ import { useMultisigVaultBalance } from "@/hooks/squads/useMultisigVaultBalance"
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { getMultisigPda } from "@sqds/multisig";
-import { DepositModal } from "./DepositModal";
 import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
+import { DepositModal } from "../DepositModal";
+import { cn } from "@/utils/styling";
 
 function BalanceCard() {
   const { publicKey } = useWallet();
@@ -31,7 +32,6 @@ function BalanceCard() {
     };
   }
 
-  // Only proceed with getMultisigPda if we have a valid publicKey
   const [multisigPda] = getMultisigPda({
     createKey: publicKey,
   });
@@ -69,7 +69,7 @@ function BalanceCard() {
   };
 }
 
-export function CurrentBalanceCard() {
+export default function CurrentBalanceContent() {
   const [targetCurrency, setTargetCurrency] =
     useState<SupportedCurrency>("USD");
   const queryClient = useQueryClient();
@@ -87,19 +87,13 @@ export function CurrentBalanceCard() {
   );
 
   const handleRefresh = async () => {
-    if (!balanceCard.multisigPda) {
-      return; // Early return if no multisigPda available
-    }
+    if (!balanceCard.multisigPda) return;
 
-    // Invalidate and refetch balance using the new object syntax
     await queryClient.invalidateQueries({
       queryKey: ["multisigBalance", balanceCard.multisigPda.toBase58()],
     });
 
-    // Refetch balance
     await balanceCard.refetchBalance();
-
-    // After balance is refreshed, refetch conversion
     await refetchConversion();
   };
 

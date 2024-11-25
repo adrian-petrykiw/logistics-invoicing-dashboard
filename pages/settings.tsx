@@ -36,90 +36,8 @@ import { useCreateMultisig } from "@/hooks/squads";
 import { PublicKey } from "@solana/web3.js";
 import { getMultisigPda, getVaultPda } from "@sqds/multisig";
 import Link from "next/link";
-
-interface EditMemberModalProps {
-  member: OrganizationMemberResponse;
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (updates: {
-    name?: string;
-    role: Role;
-    wallet_address?: string;
-  }) => Promise<void>;
-}
-
-const EditMemberModal = ({
-  member,
-  isOpen,
-  onClose,
-  onSubmit,
-}: EditMemberModalProps) => {
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-
-    try {
-      await onSubmit({
-        name: formData.get("name") as string,
-        role: formData.get("role") as Role,
-        wallet_address: formData.get("walletAddress") as string,
-      });
-      onClose();
-    } catch (error) {
-      toast.error("Failed to update member");
-      console.error("Update member error:", error);
-    }
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent
-        onPointerDownOutside={(e) => {
-          e.preventDefault();
-        }}
-        onEscapeKeyDown={(e) => {
-          e.preventDefault();
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Edit Team Member</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Name</Label>
-            <Input name="name" defaultValue={member.name || ""} required />
-          </div>
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input value={member.email || ""} disabled />
-          </div>
-          {/* <div className="space-y-2">
-            <Label>Wallet Address</Label>
-            <Input
-              name="walletAddress"
-              defaultValue={member.wallet_address || ""}
-            />
-          </div> */}
-          <div className="space-y-2">
-            <Label>Role</Label>
-            <Select name="role" defaultValue={member.role}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="user">Member</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="submit" className="w-full">
-            Update Member
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-};
+import { VaultAddress } from "@/features/settings/components/VaultAddress";
+import { EditMemberModal } from "@/features/settings/components/EditMemberModal";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -328,58 +246,17 @@ export default function SettingsPage() {
                   <div className="space-y-2">
                     <p className="text-sm font-medium"> Multisig Account</p>
                     <Input
-                      // value={(() => {
-                      //   // const createKey = PublicKey.findProgramAddressSync(
-                      //   //   [Buffer.from("squad"), publicKey!.toBuffer()],
-                      //   //   new PublicKey(
-                      //   //     "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
-                      //   //   )
-                      //   // )[0];
-                      //   if (!publicKey) {
-                      //     return "Multsig not found"
-                      //   }
-                      //   const createKey = publicKey;
-                      //   const [multisigPda] = getMultisigPda({
-                      //     createKey: createKey,
-                      //   });
-                      //   return multisigPda.toBase58();
-                      // })()}
                       value={`${organization.multisig_wallet}`}
                       disabled
                       type="text"
                       className="text-xs"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">
-                      {" "}
-                      Vault/Treasury Address
-                    </p>
-                    <Input
-                      value={(() => {
-                        // const createKey = PublicKey.findProgramAddressSync(
-                        //   [Buffer.from("squad"), publicKey!.toBuffer()],
-                        //   new PublicKey(
-                        //     "SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf"
-                        //   )
-                        // )[0];
-                        // const [multisigPda] = getMultisigPda({
-                        //   createKey: createKey,
-                        // });
-                        const multisigPda = new PublicKey(
-                          `${organization.multisig_wallet}`
-                        );
-                        const [vaultPda] = getVaultPda({
-                          multisigPda,
-                          index: 0,
-                        });
-                        return vaultPda.toBase58();
-                      })()}
-                      disabled
-                      type="text"
-                      className="text-xs"
+                  {organization && (
+                    <VaultAddress
+                      multisigWallet={organization.multisig_wallet}
                     />
-                  </div>
+                  )}
                 </div>
 
                 {/* Team Members */}

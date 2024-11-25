@@ -1,7 +1,7 @@
 // hooks/useAuth.ts
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AuthUser } from "@/types/auth";
-import { api } from "@/lib/api";
+import { api } from "@/utils/api";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useCallback } from "react";
 
