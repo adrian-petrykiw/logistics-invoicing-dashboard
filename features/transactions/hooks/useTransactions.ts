@@ -1,21 +1,13 @@
-// hooks/useTransactions.ts
 import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
 import { TransactionRecord } from "@/types/transaction";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/features/auth/hooks/useOrganization";
-
-interface TransactionResponse {
-  success: boolean;
-  data: TransactionRecord[];
-  error?: {
-    error: string;
-    code: string;
-    details?: string;
-  };
-}
+import { api } from "@/utils/api";
+import { AuthUser } from "@/types/auth";
 
 export const useTransactions = () => {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const { organization } = useOrganization(user?.walletAddress || "");
 
   const {
@@ -27,30 +19,41 @@ export const useTransactions = () => {
   } = useQuery({
     queryKey: ["transactions", organization?.id],
     queryFn: async (): Promise<TransactionRecord[]> => {
-      if (!organization?.id) {
-        throw new Error("No organization ID available");
+      if (!organization?.id || !user) {
+        throw new Error("Required auth information not available");
       }
 
-      const response = await fetch(
-        `/api/transactions?organization_id=${organization.id}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const { data } = await api.get<{
+        success: boolean;
+        data: TransactionRecord[];
+        error?: any;
+      }>(`/transactions`, {
+        params: { organization_id: organization.id },
+        headers: {
+          "x-user-email": user.email,
+          "x-wallet-address": user.walletAddress,
+          "x-user-info": JSON.stringify(user.userInfo),
+        },
+      });
 
-      const result: TransactionResponse = await response.json();
-
-      if (!result.success) {
-        throw new Error(
-          result.error?.details || "Failed to fetch transactions"
-        );
+      if (!data.success) {
+        throw new Error(data.error?.details || "Failed to fetch transactions");
       }
 
-      return result.data;
+      return data.data;
     },
-    enabled: !!organization?.id,
+    enabled: !!(isAuthenticated && organization?.id && user),
+    retry: (failureCount, error) => {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          return false;
+        }
+      }
+      return failureCount < 3;
+    },
+    refetchOnWindowFocus: true,
+    staleTime: 30000,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   return {
