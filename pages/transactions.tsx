@@ -18,6 +18,7 @@ import { useTransactions } from "@/features/transactions/hooks/useTransactions";
 import { useAuthContext } from "@/components/providers/AuthProvider";
 import { cn } from "@/utils/styling";
 import { formatDate } from "@/utils/format";
+import { USDC_MINT } from "@/utils/constants";
 
 export default function TransactionsPage() {
   const router = useRouter();
@@ -117,24 +118,22 @@ export default function TransactionsPage() {
                       href={`https://solscan.io/tx/${tx.signature}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800"
+                      className="text-black hover:text-blue-600"
                     >
                       {tx.signature.slice(0, 8)}...{tx.signature.slice(-8)}
                     </a>
                   </TableCell>
                   <TableCell>
-                    {tx.amount.toLocaleString()}{" "}
-                    {tx.token_mint === process.env.NEXT_PUBLIC_USDC_MINT
-                      ? "USDC"
-                      : "SOL"}
+                    {Number(tx.amount).toFixed(2)}{" "}
+                    {tx.token_mint === USDC_MINT.toString() ? "USDC" : "SOL"}
                   </TableCell>
                   <TableCell>
                     <span
-                      className={`px-2 py-1 rounded text-sm ${getStatusStyle(
+                      className={`px-2 py-1 rounded text-xs ${getStatusStyle(
                         tx.status
                       )}`}
                     >
-                      {tx.status}
+                      {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
                     </span>
                   </TableCell>
                   <TableCell className="capitalize">
