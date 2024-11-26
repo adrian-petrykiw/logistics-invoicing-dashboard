@@ -17,7 +17,7 @@ import { Layout } from "@/components/Layout";
 export default function TransactionsPage() {
   const router = useRouter();
   const { connected } = useWallet();
-  // const { transactions, isLoading } = useTransactions();
+  const { transactions, isLoading } = useTransactions();
 
   // useEffect(() => {
   //   const checkAuth = async () => {
@@ -53,56 +53,85 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Transactions Table */}
-      <div className="bg-primary rounded-lg shadow">
+      <div className="bg-primary rounded-md shadow border border-neutral-200">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Date</TableHead>
               <TableHead>Transaction ID</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Sender</TableHead>
+              <TableHead>Receiver</TableHead>
               <TableHead>Amount</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Type</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {/* {transactions?.length ? (
-                transactions.map((tx: any) => (
-                  <TableRow key={tx.id}>
-                    <TableCell>{tx.date}</TableCell>
-                    <TableCell className="font-mono">{tx.id}</TableCell>
-                    <TableCell>{tx.amount} SOL</TableCell>
-                    <TableCell>
-                      <span
-                        className={`px-2 py-1 rounded text-sm ${
-                          tx.status === "completed"
-                            ? "bg-success/10 text-success"
-                            : tx.status === "pending"
-                            ? "bg-warning/10 text-warning"
-                            : "bg-error/10 text-error"
-                        }`}
-                      >
-                        {tx.status}
-                      </span>
-                    </TableCell>
-                    <TableCell>{tx.type}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="text-center text-quaternary"
-                  >
-                    No transactions found
+            {transactions.length ? (
+              transactions.map((tx) => (
+                <TableRow key={tx.id}>
+                  <TableCell className="text-xs">
+                    {formatDate(tx.created_at)}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    <a
+                      href={`https://solscan.io/tx/${tx.signature}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-black hover:text-blue-600"
+                    >
+                      {tx.signature.slice(0, 8)}...{tx.signature.slice(-8)}
+                    </a>
+                  </TableCell>
+                  <TableCell className="capitalize text-xs">
+                    {tx.sender.multisig_address == publicKey?.toString()
+                      ? "Outbound"
+                      : "Inbound"}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    <a
+                      href={`https://solscan.io/tx/${tx.signature}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-black hover:text-blue-600"
+                    >
+                      {tx.sender.multisig_address.slice(0, 8)}...
+                      {tx.sender.multisig_address.slice(-8)}
+                    </a>
+                  </TableCell>{" "}
+                  <TableCell className="font-mono text-xs">
+                    <a
+                      href={`https://solscan.io/tx/${tx.signature}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-black hover:text-blue-600"
+                    >
+                      {tx.recipient.multisig_address.slice(0, 8)}...
+                      {tx.recipient.multisig_address.slice(-8)}
+                    </a>
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {Number(tx.amount).toFixed(2)}{" "}
+                    {tx.token_mint === USDC_MINT.toString() ? "USDC" : "SOL"}
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`px-2 py-1 rounded text-xs ${getStatusStyle(
+                        tx.status
+                      )}`}
+                    >
+                      {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+                    </span>
                   </TableCell>
                 </TableRow>
-              )} */}
-            <TableRow>
-              <TableCell colSpan={5} className="text-center text-quaternary">
-                No transactions found
-              </TableCell>
-            </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-quaternary">
+                  No transactions found
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>

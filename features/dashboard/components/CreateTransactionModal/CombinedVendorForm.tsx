@@ -55,7 +55,8 @@ export function CombinedVendorForm({
   const [open, setOpen] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
 
-  const { data: vendorDetails, isLoading } = useVendorDetails(selectedVendor);
+  const { data: vendorDetails, isLoading: isVendorLoading } =
+    useVendorDetails(selectedVendor);
 
   const filteredVendors = mockVendors.filter((vendor) =>
     vendor.name.toLowerCase().includes(query.toLowerCase())
@@ -177,11 +178,11 @@ export function CombinedVendorForm({
                     <div className="text-sm text-muted-foreground justify-center p-4 items-center text-center">
                       Please select a vendor to view details
                     </div>
-                  ) : isLoading ? (
-                    <div className="space-y-1 p-2 m-0">
-                      <Skeleton className="h-2 w-[250px]" />
-                      <Skeleton className="h-2 w-[200px]" />
-                      <Skeleton className="h-2 w-[150px]" />
+                  ) : isVendorLoading ? (
+                    <div className="space-y-1 p-0 m-0">
+                      <Skeleton className="h-[14px] w-[250px]" />
+                      <Skeleton className="h-[12px] w-[200px]" />
+                      <Skeleton className="h-[12px] w-[150px]" />
                     </div>
                   ) : vendorDetails ? (
                     <div className="p-0 m-0">
@@ -203,7 +204,7 @@ export function CombinedVendorForm({
             {selectedVendor && vendorDetails && (
               <div className="space-y-4">
                 <div className="space-y-4">
-                  <div className="flex">
+                  <div className="flex mb-[-12px]">
                     <div className="w-[50%]">
                       <FormLabel>Invoices</FormLabel>
                     </div>
@@ -252,15 +253,19 @@ export function CombinedVendorForm({
                             </FormItem>
                           )}
                         />
-                        {fields.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => remove(index)}
-                            className="w-10 flex-shrink-0 hover:opacity-70 transition-opacity"
-                          >
-                            <TrashIcon className="h-5 w-5 text-black" />
-                          </button>
-                        )}
+
+                        <button
+                          type="button"
+                          disabled={index == 0}
+                          onClick={() => remove(index)}
+                          className={`w-10 flex-shrink-0 hover:opacity-70 transition-opacity`}
+                        >
+                          <TrashIcon
+                            className={`h-5 w-5  ${
+                              index == 0 ? "text-gray-300" : "text-black"
+                            }`}
+                          />
+                        </button>
                       </div>
                       {index === fields.length - 1 && (
                         <button

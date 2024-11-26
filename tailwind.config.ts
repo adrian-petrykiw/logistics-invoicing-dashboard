@@ -30,6 +30,8 @@ module.exports = {
         ring: "#1A1A1A",
         background: "#FFFFFF",
         foreground: "#1A1A1A",
+        darkgray: "#F5F5F7",
+        lightgray: "#F6F6F8",
         muted: {
           DEFAULT: "#F7F7F7",
           foreground: "#2D2D2D",

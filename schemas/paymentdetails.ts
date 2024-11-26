@@ -10,7 +10,7 @@ import { z } from "zod";
 
 export const paymentDetailsSchema = z.discriminatedUnion("paymentMethod", [
   z.object({
-    paymentMethod: z.literal("credit"),
+    paymentMethod: z.literal("account_credit"),
   }),
   z.object({
     paymentMethod: z.literal("ach"),

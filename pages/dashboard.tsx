@@ -1,16 +1,47 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { FiPlus, FiUsers, FiActivity, FiGrid } from "react-icons/fi";
+import {
+  FiPlus,
+  FiUsers,
+  FiActivity,
+  FiGrid,
+  FiSend,
+  FiDownload,
+} from "react-icons/fi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 // import { useSquadsWallet } from "@/features/dashboard/hooks/useSquadsWallet";
-import { CreateTransactionModal } from "@/features/dashboard/components/CreateTransactionModal/index";
 import { CurrentBalanceCard } from "@/features/dashboard/components/CurrentBalanceCard";
+import { LuArrowDownToLine } from "react-icons/lu";
 import {
-  YieldPeriod,
-  YieldPeriodSelect,
-} from "@/features/dashboard/components/YieldPeriodSelect";
+  SendHorizonal,
+  FileText,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  Bell,
+  Wallet,
+  HandCoins,
+  Receipt,
+} from "lucide-react";
+import dynamic from "next/dynamic";
+import { YieldPeriod } from "@/features/dashboard/components/YieldPeriodSelect";
+
+// Dynamic imports for components that use Solana
+const CreateTransactionModal = dynamic(
+  () =>
+    import("@/features/dashboard/components/CreateTransactionModal").then(
+      (mod) => mod.CreateTransactionModal
+    ),
+  { ssr: false }
+);
+const YieldPeriodSelect = dynamic(
+  () =>
+    import("@/features/dashboard/components/YieldPeriodSelect").then(
+      (mod) => mod.YieldPeriodSelect
+    ),
+  { ssr: false }
+);
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -38,14 +69,25 @@ export default function DashboardPage() {
   return (
     <main className="container mx-auto py-8 ">
       <div className="flex justify-between items-end mb-4">
-        <h1 className="text-lg font-bold text-tertiary mb-0">Account Info</h1>
-        <Button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="bg-tertiary text-primary hover:bg-quaternary"
-        >
-          <FiPlus />
-          New Transaction
-        </Button>
+        <h1 className="text-lg font-semibold text-tertiary mb-0">
+          Account Info
+        </h1>
+        <div className="flex flex-row gap-2">
+          <Button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="bg-lightgray text-quaternary hover:bg-darkgray shadow-none"
+          >
+            <LuArrowDownToLine />
+            Request Payment
+          </Button>{" "}
+          <Button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="bg-tertiary text-primary hover:bg-quaternary shadow-none"
+          >
+            <SendHorizonal />
+            Send Payment
+          </Button>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-3 gap-6 mb-8">
@@ -92,12 +134,12 @@ export default function DashboardPage() {
         </Card> */}
       </div>
 
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold text-tertiary mb-4">
+      <Card className="p-4">
+        <h2 className="text-md font-semibold text-tertiary mb-4">
           Recent Activity
         </h2>
         {/* TODO: Add recent activity list */}
-        <div className="text-quaternary">No recent activity</div>
+        <div className="text-quaternary text-xs">No recent activity</div>
       </Card>
 
       <CreateTransactionModal
