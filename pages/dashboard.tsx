@@ -27,8 +27,6 @@ import {
   HandCoins,
   Receipt,
 } from "lucide-react";
-import dynamic from "next/dynamic";
-import { YieldPeriod } from "@/features/dashboard/components/YieldPeriodSelect";
 
 // Dynamic imports for components that use Solana
 const CreateTransactionModal = dynamic(
@@ -108,14 +106,14 @@ export default function DashboardPage() {
         <div className="flex flex-row gap-2">
           <Button
             onClick={() => setIsCreateModalOpen(true)}
-            className="bg-lightgray text-quaternary hover:bg-darkgray shadow-none"
+            className="bg-lightgray text-quaternary hover:bg-darkgray shadow"
           >
             <LuArrowDownToLine />
             Request Payment
           </Button>{" "}
           <Button
             onClick={() => setIsCreateModalOpen(true)}
-            className="bg-tertiary text-primary hover:bg-quaternary shadow-none"
+            className="bg-tertiary text-primary hover:bg-quaternary shadow"
           >
             <SendHorizonal />
             Send Payment
