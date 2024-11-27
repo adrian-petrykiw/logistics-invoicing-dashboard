@@ -1,5 +1,5 @@
 import { useApi } from "@/hooks/useApi";
-import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import {
   AddMemberInput,
   OrganizationMemberResponse,

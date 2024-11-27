@@ -11,7 +11,10 @@ import {
 } from "react-icons/fi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-// import { useSquadsWallet } from "@/features/dashboard/hooks/useSquadsWallet";
+import { YieldPeriod } from "@/features/dashboard/components/YieldPeriodSelect";
+import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/components/providers/AuthProvider";
+import dynamic from "next/dynamic";
 import { CurrentBalanceCard } from "@/features/dashboard/components/CurrentBalanceCard";
 import { LuArrowDownToLine } from "react-icons/lu";
 import {
@@ -44,27 +47,57 @@ const YieldPeriodSelect = dynamic(
 );
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const { connected, publicKey } = useWallet();
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [yieldPeriod, setYieldPeriod] = useState<YieldPeriod>("ytd");
   //   const { multisig, isLoading } = useSquadsWallet();
+  const router = useRouter();
+  const { connected, publicKey } = useWallet();
+  const { user, isAuthenticated, isLoading } = useAuthContext();
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  // Protect dashboard route
+  console.log("Dashboard state:", {
+    connected,
+    publicKey: publicKey?.toString(),
+    user,
+    isLoading,
+    isAuthenticated,
+    wallet: window?.particle?.auth?.getUserInfo(),
+  });
+
+  // Modified navigation logic
   useEffect(() => {
-    if (!connected) {
-      router.push("/");
-    }
-  }, [connected, router]);
+    const checkAuth = async () => {
+      if (!isLoading && !isAuthenticated) {
+        console.log("Redirecting to home - not authenticated");
+        router.push("/");
+      }
+    };
+    checkAuth();
+  }, [isAuthenticated, isLoading, router]);
 
-  //   if (!connected || isLoading) {
-  if (!connected) {
+  // Show loading while we're checking auth status
+  if (isLoading || !connected) {
     return (
       <div className="min-h-screen bg-primary flex items-center justify-center">
         <div className="text-tertiary">Loading...</div>
       </div>
     );
   }
+
+  // Check auth status
+  if (!isAuthenticated || !user?.walletAddress) {
+    console.log("Not authenticated, wallet state:", {
+      isAuthenticated,
+      user,
+      connected,
+    });
+    // Don't redirect here, let the useEffect handle it
+    return (
+      <div className="min-h-screen bg-primary flex items-center justify-center">
+        <div className="text-tertiary">Authenticating...</div>
+      </div>
+    );
+  }
+  const { walletAddress, email } = user;
 
   return (
     <main className="container mx-auto py-8 ">
@@ -91,10 +124,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <CurrentBalanceCard balance={10.49} />
+        <CurrentBalanceCard />
         <Card className="p-4 items-stretch">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-md font-medium text-tertiary">
+            <h3 className="text-md font-semibold text-tertiary">
               Transactions this Month
             </h3>
             <FiActivity className="text-quaternary" />
@@ -105,7 +138,7 @@ export default function DashboardPage() {
         </Card>
         <Card className="p-4 items-stretch">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-md font-medium text-tertiary">
+            <h3 className="text-md font-semibold text-tertiary">
               Yield Earnings{" "}
             </h3>
             <div className="flex items-center gap-2">
@@ -120,18 +153,6 @@ export default function DashboardPage() {
             0.00 USDC
           </div>
         </Card>
-        {/* <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-md font-medium text-tertiary">Team</h3>
-            <FiUsers className="text-quaternary" />
-          </div>
-          <div className="text-2xl font-bold text-tertiary">
-          {multisig?.members || None}
-
-        </div>
-
-          <div className="text-2xl font-bold text-tertiary">NA</div>
-        </Card> */}
       </div>
 
       <Card className="p-4">
@@ -145,7 +166,8 @@ export default function DashboardPage() {
       <CreateTransactionModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        userWalletAddress={publicKey?.toString() || ""} // Pass wallet address
+        userWalletAddress={walletAddress}
+        userEmail={email}
       />
     </main>
   );

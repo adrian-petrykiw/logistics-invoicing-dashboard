@@ -60,4 +60,5 @@ export interface PaymentDetailsFormProps {
   ) => void;
   onBack: () => void;
   vendorFormData: CombinedFormValues;
+  userWalletAddress: string;
 }

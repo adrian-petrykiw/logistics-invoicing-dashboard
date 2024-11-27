@@ -1,3 +1,4 @@
+// types/particle.d.ts
 export {};
 
 declare global {

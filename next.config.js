@@ -1,9 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // experimental: {
-  //   outputStandalone: true,
-  // },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -13,7 +10,10 @@ const nextConfig = {
         tls: false,
       };
     }
-    config.ignoreWarnings = [{ module: /node_modules\/punycode/ }];
+    config.ignoreWarnings = [
+      { module: /node_modules\/punycode/ },
+      { message: /Critical dependency/ },
+    ];
     return config;
   },
 };

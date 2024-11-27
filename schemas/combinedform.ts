@@ -1,4 +1,5 @@
 import { CustomField } from "@/types/types";
+import { VendorListItem } from "@/types/vendor";
 import { z } from "zod";
 
 export const invoiceSchema = z.object({
@@ -56,4 +57,8 @@ export type CombinedFormValues = z.infer<
 export interface CombinedVendorFormProps {
   onNext: (data: CombinedFormValues) => void;
   userWalletAddress: string;
+  availableVendors: VendorListItem[];
+  isVendorsLoading: boolean;
+  vendorsError: Error | null;
+  refetchVendors: () => void;
 }

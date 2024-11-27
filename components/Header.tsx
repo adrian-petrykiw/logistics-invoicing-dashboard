@@ -1,7 +1,7 @@
 import { ParticleButton } from "@/components/ParticleButton";
+import { cn } from "@/utils/styling";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { cn } from "@/lib/utils";
 
 const navigation = [
   { name: "Overview", href: "/dashboard" },

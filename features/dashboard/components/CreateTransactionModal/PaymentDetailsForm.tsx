@@ -24,13 +24,42 @@ import {
   paymentDetailsSchema,
 } from "@/schemas/paymentdetails";
 import { Card, CardContent } from "@/components/ui/card";
+import { getMultisigPda } from "@sqds/multisig";
+import { PublicKey } from "@solana/web3.js";
+import { useCreditBalance } from "../../hooks/useCreditBalance";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function PaymentDetailsForm({
   onNext,
   onBack,
   vendorFormData,
+  userWalletAddress,
 }: PaymentDetailsFormProps) {
   const totalAmount = vendorFormData?.amount || 0;
+
+  const publicKey = new PublicKey(userWalletAddress);
+
+  // const createKey = PublicKey.findProgramAddressSync(
+  //   [Buffer.from("squad"), publicKey.toBuffer()],
+  //   new PublicKey("SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf")
+  // )[0];
+
+  const [multisigPda] = getMultisigPda({
+    createKey: publicKey,
+  });
+
+  // Fetch credit balance
+  const { data: creditBalance, isLoading: isLoadingCredit } =
+    useCreditBalance(multisigPda);
+
+  const formatBalance = (balance: number | null | undefined) => {
+    if (balance === null || balance === undefined) return "0.00";
+    return balance.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
 
   const form = useForm<PaymentDetailsFormValues>({
     resolver: zodResolver(paymentDetailsSchema),
@@ -100,9 +129,20 @@ export function PaymentDetailsForm({
 
             {selectedMethod === "credit" && (
               <div className="pt-2">
-                <p className="text-sm text-muted-foreground">
-                  Available credit balance: $0.00
-                </p>
+                <div className="text-sm text-muted-foreground">
+                  Available credit balance:{" "}
+                  {isLoadingCredit ? (
+                    <Skeleton className="h-4 w-16 inline-block" />
+                  ) : (
+                    `$${formatBalance(creditBalance)} USDC`
+                  )}
+                </div>
+                {(creditBalance ?? 0) < totalAmount && !isLoadingCredit && (
+                  <p className="text-sm text-destructive mt-1 text-red-500 font-medium">
+                    Insufficient credit balance for this transaction. Please
+                    choose another payment method or deposit more funds!
+                  </p>
+                )}
               </div>
             )}
 
@@ -357,7 +397,12 @@ export function PaymentDetailsForm({
             >
               Back
             </Button>
-            <Button type="submit" form="payment-form" className="flex-1">
+            <Button
+              type="submit"
+              form="payment-form"
+              className="flex-1"
+              disabled={(creditBalance ?? 0) < totalAmount}
+            >
               Next
             </Button>
           </div>

@@ -34,85 +34,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { VendorRegistrationModal } from "@/features/settings/components/RegistrationModal";
 import { useCreateMultisig } from "@/hooks/squads";
 import { PublicKey } from "@solana/web3.js";
-import { getVaultPda } from "@sqds/multisig";
+import { getMultisigPda, getVaultPda } from "@sqds/multisig";
 import Link from "next/link";
-
-interface EditMemberModalProps {
-  member: OrganizationMemberResponse;
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (updates: {
-    name?: string;
-    role: Role;
-    wallet_address?: string;
-  }) => Promise<void>;
-}
-
-const EditMemberModal = ({
-  member,
-  isOpen,
-  onClose,
-  onSubmit,
-}: EditMemberModalProps) => {
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-
-    try {
-      await onSubmit({
-        name: formData.get("name") as string,
-        role: formData.get("role") as Role,
-        wallet_address: formData.get("walletAddress") as string,
-      });
-      onClose();
-    } catch (error) {
-      toast.error("Failed to update member");
-      console.error("Update member error:", error);
-    }
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit Team Member</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Name</Label>
-            <Input name="name" defaultValue={member.name || ""} required />
-          </div>
-          <div className="space-y-2">
-            <Label>Email</Label>
-            <Input value={member.email || ""} disabled />
-          </div>
-          {/* <div className="space-y-2">
-            <Label>Wallet Address</Label>
-            <Input
-              name="walletAddress"
-              defaultValue={member.wallet_address || ""}
-            />
-          </div> */}
-          <div className="space-y-2">
-            <Label>Role</Label>
-            <Select name="role" defaultValue={member.role}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="user">Member</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="submit" className="w-full">
-            Update Member
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-};
+import { VaultAddress } from "@/features/settings/components/VaultAddress";
+import { EditMemberModal } from "@/features/settings/components/EditMemberModal";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -223,7 +148,12 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input value={userInfo.email} disabled type="email" />
+                <Input
+                  value={userInfo.email}
+                  disabled
+                  type="email"
+                  className="text-xs"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Wallet Address</Label>
@@ -231,6 +161,7 @@ export default function SettingsPage() {
                   value={publicKey?.toBase58() || ""}
                   disabled
                   type="text"
+                  className="text-xs"
                 />
               </div>
             </CardContent>
@@ -315,30 +246,17 @@ export default function SettingsPage() {
                   <div className="space-y-2">
                     <p className="text-sm font-medium"> Multisig Account</p>
                     <Input
-                      value={organization.multisig_wallet || ""}
+                      value={`${organization.multisig_wallet}`}
                       disabled
                       type="text"
+                      className="text-xs"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">
-                      {" "}
-                      Vault/Treasury Address
-                    </p>
-                    <Input
-                      value={(() => {
-                        const [vaultPda] = getVaultPda({
-                          multisigPda: new PublicKey(
-                            organization.multisig_wallet
-                          ),
-                          index: 0,
-                        });
-                        return vaultPda.toBase58();
-                      })()}
-                      disabled
-                      type="text"
+                  {organization && (
+                    <VaultAddress
+                      multisigWallet={organization.multisig_wallet}
                     />
-                  </div>
+                  )}
                 </div>
 
                 {/* Team Members */}
@@ -363,7 +281,14 @@ export default function SettingsPage() {
                             <FiPlus className="mr-[4px]" /> Add Member
                           </button> */}
                         </DialogTrigger>
-                        <DialogContent>
+                        <DialogContent
+                          onPointerDownOutside={(e) => {
+                            e.preventDefault();
+                          }}
+                          onEscapeKeyDown={(e) => {
+                            e.preventDefault();
+                          }}
+                        >
                           <DialogHeader>
                             <DialogTitle>Add Member</DialogTitle>
                           </DialogHeader>

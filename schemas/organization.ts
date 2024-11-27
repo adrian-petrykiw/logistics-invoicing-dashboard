@@ -23,6 +23,12 @@ export const ApiResponseSchema = z.object({
   error: ApiErrorSchema.optional(),
 });
 
+const CustomFieldSchema = z.object({
+  name: z.string(),
+  required: z.boolean().default(false),
+  type: z.enum(["text", "number"]),
+  key: z.string(),
+});
 export const BusinessDetailsSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
   companyAddress: z.string().optional(),
@@ -34,6 +40,7 @@ export const BusinessDetailsSchema = z.object({
   ownerName: z.string().min(1, "Owner name is required"),
   ownerEmail: z.string().email("Invalid owner email"),
   ownerWalletAddress: WalletAddressSchema,
+  customFields: z.array(CustomFieldSchema).optional(),
 });
 
 export const TimestampSchema = z.string().refine(

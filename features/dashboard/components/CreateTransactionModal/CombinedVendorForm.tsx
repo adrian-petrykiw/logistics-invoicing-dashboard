@@ -7,8 +7,12 @@ import {
   TrashIcon,
 } from "@radix-ui/react-icons";
 import { useFieldArray, useForm } from "react-hook-form";
-import { useState } from "react";
-import { mockVendors, useVendorDetails } from "@/hooks/useVendorDetails";
+import { useEffect, useState } from "react";
+import {
+  useVendorSelection,
+  useAvailableVendors,
+} from "@/hooks/useVendorSelection";
+import { VendorListItem } from "@/types/vendor";
 import {
   Form,
   FormField,
@@ -41,29 +45,32 @@ import {
 } from "@/schemas/combinedform";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// const mockVendors = [
-//   { id: "vendor1", name: "PayCargo Vendor - Charlotte USA" },
-//   { id: "vendor2", name: "PayCargo Vendor - Canada" },
-//   { id: "vendor3", name: "PayCargo Vendor - India" },
-// ];
-
-export function CombinedVendorForm({
+const CombinedVendorForm = ({
   onNext,
   userWalletAddress,
-}: CombinedVendorFormProps) {
+  availableVendors,
+  isVendorsLoading,
+  vendorsError,
+  refetchVendors,
+}: CombinedVendorFormProps) => {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<string | null>(null);
 
-  const { data: vendorDetails, isLoading: isVendorLoading } =
-    useVendorDetails(selectedVendor);
+  const {
+    data: vendorDetails,
+    isLoading: isVendorLoading,
+    refetch,
+  } = useVendorSelection(selectedVendor);
 
-  const filteredVendors = mockVendors.filter((vendor) =>
+  const filteredVendors = availableVendors.filter((vendor) =>
     vendor.name.toLowerCase().includes(query.toLowerCase())
   );
 
   const form = useForm<CombinedFormValues>({
-    resolver: zodResolver(createCombinedSchema(vendorDetails?.customFields)),
+    resolver: zodResolver(
+      createCombinedSchema(vendorDetails?.business_details.customFields)
+    ),
     defaultValues: {
       vendor: "",
       invoices: [{ number: "", amount: 0 }],
@@ -78,7 +85,6 @@ export function CombinedVendorForm({
     name: "invoices",
   });
 
-  // Calculate total amount from invoices
   const totalAmount = form
     .watch("invoices")
     .reduce((sum, invoice) => sum + (invoice.amount || 0), 0);
@@ -88,15 +94,61 @@ export function CombinedVendorForm({
       ...data,
       amount: totalAmount,
       sender: userWalletAddress,
-      receiver: vendorDetails?.address || "",
+      receiver: vendorDetails?.business_details.companyAddress || "",
     };
     onNext(enrichedData);
   };
 
+  // At the top of your component
+  useEffect(() => {
+    console.log("CombinedVendorForm mounted");
+    console.log("User wallet address:", userWalletAddress);
+  }, [userWalletAddress]);
+
+  useEffect(() => {
+    console.log("Available vendors updated:", availableVendors);
+    console.log("Vendors loading:", isVendorsLoading);
+  }, [availableVendors, isVendorsLoading]);
+
+  useEffect(() => {
+    if (selectedVendor) {
+      console.log("Selected vendor details:", vendorDetails);
+      console.log("Vendor loading:", isVendorLoading);
+    }
+  }, [selectedVendor, vendorDetails, isVendorLoading]);
+
+  if (isVendorsLoading) {
+    return (
+      <div className="flex flex-col space-y-4 p-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="space-y-2">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!isVendorsLoading && vendorsError) {
+    return (
+      <div className="flex flex-col items-center justify-center p-6 text-center">
+        <p className="text-red-500 mb-4">
+          {vendorsError instanceof Error
+            ? vendorsError.message
+            : "Failed to load vendors"}
+        </p>
+        <Button onClick={() => refetchVendors()} variant="outline">
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <Form {...form}>
       <div className="flex flex-col h-full">
-        <div className="flex-1 overflow-y-auto mb-10">
+        <div className="flex-1 overflow-y-auto pb-10 mb-10">
           <form
             id="vendor-form"
             onSubmit={form.handleSubmit(onSubmit)}
@@ -120,8 +172,9 @@ export function CombinedVendorForm({
                             }`}
                           >
                             {field.value
-                              ? mockVendors.find(
-                                  (vendor) => vendor.id === field.value
+                              ? availableVendors.find(
+                                  (vendor: VendorListItem) =>
+                                    vendor.id === field.value
                                 )?.name
                               : "Select vendor"}
                             <CaretSortIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -142,27 +195,35 @@ export function CombinedVendorForm({
                           <CommandList>
                             <CommandEmpty>No vendors found.</CommandEmpty>
                             <CommandGroup>
-                              {filteredVendors.map((vendor) => (
-                                <CommandItem
-                                  key={vendor.id}
-                                  value={vendor.id}
-                                  onSelect={() => {
-                                    form.setValue("vendor", vendor.id);
-                                    setSelectedVendor(vendor.id);
-                                    setOpen(false);
-                                    setQuery("");
-                                  }}
-                                >
-                                  {vendor.name}
-                                  <CheckIcon
-                                    className={`ml-auto h-4 w-4 ${
-                                      vendor.id === field.value
-                                        ? "opacity-100"
-                                        : "opacity-0"
-                                    }`}
-                                  />
-                                </CommandItem>
-                              ))}
+                              {isVendorsLoading ? (
+                                <div className="p-4">
+                                  <Skeleton className="h-5 w-full" />
+                                </div>
+                              ) : (
+                                filteredVendors.map(
+                                  (vendor: VendorListItem) => (
+                                    <CommandItem
+                                      key={vendor.id}
+                                      value={vendor.id}
+                                      onSelect={() => {
+                                        form.setValue("vendor", vendor.id);
+                                        setSelectedVendor(vendor.id);
+                                        setOpen(false);
+                                        setQuery("");
+                                      }}
+                                    >
+                                      {vendor.name}
+                                      <CheckIcon
+                                        className={`ml-auto h-4 w-4 ${
+                                          vendor.id === field.value
+                                            ? "opacity-100"
+                                            : "opacity-0"
+                                        }`}
+                                      />
+                                    </CommandItem>
+                                  )
+                                )
+                              )}
                             </CommandGroup>
                           </CommandList>
                         </Command>
@@ -187,13 +248,13 @@ export function CombinedVendorForm({
                   ) : vendorDetails ? (
                     <div className="p-0 m-0">
                       <h4 className="font-semibold text-sm">
-                        {vendorDetails.name}
+                        {vendorDetails.business_details.companyName}
                       </h4>
                       <p className="text-xs text-muted-foreground">
-                        {vendorDetails.address}
+                        {vendorDetails.business_details.companyAddress}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {vendorDetails.phone}
+                        {vendorDetails.business_details.companyPhone}
                       </p>
                     </div>
                   ) : null}
@@ -281,8 +342,7 @@ export function CombinedVendorForm({
                   ))}
                 </div>
 
-                {/* Dynamic Custom Fields */}
-                {vendorDetails.customFields.map((field) => (
+                {vendorDetails.business_details.customFields?.map((field) => (
                   <FormField
                     key={field.key}
                     control={form.control}
@@ -294,6 +354,7 @@ export function CombinedVendorForm({
                           <Input
                             type={field.type === "number" ? "number" : "text"}
                             placeholder={`Enter ${field.name.toLowerCase()}`}
+                            required={field.required}
                             {...formField}
                           />
                         </FormControl>
@@ -359,15 +420,19 @@ export function CombinedVendorForm({
           </form>
         </div>
 
-        {/* Fixed button at bottom */}
         <div className="fixed bottom-0 left-0 right-0 p-6 bg-background mt-auto">
-          <Button type="submit" form="vendor-form" className="w-full">
+          <Button
+            type="submit"
+            form="vendor-form"
+            className="w-full"
+            disabled={isVendorLoading || !selectedVendor}
+          >
             Next
           </Button>
         </div>
       </div>
     </Form>
   );
-}
+};
 
 export default CombinedVendorForm;

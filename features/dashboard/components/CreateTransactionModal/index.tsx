@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAvailableVendors } from "@/hooks/useVendorSelection";
 import {
   Dialog,
   DialogContent,
@@ -9,27 +10,45 @@ import { PaymentDetailsForm } from "./PaymentDetailsForm";
 import { Confirmation } from "./Confirmation";
 import { Progress } from "@/components/ui/progress";
 import CombinedVendorForm from "./CombinedVendorForm";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { useRouter } from "next/router";
 import { PaymentDetailsFormValues } from "@/schemas/paymentdetails";
 import { CombinedFormValues } from "@/schemas/combinedform";
+import { VendorListItem } from "@/types/vendor";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface CreateTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   userWalletAddress: string;
+  userEmail: string;
 }
 
 export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
   isOpen,
   onClose,
   userWalletAddress,
+  userEmail,
 }) => {
   const [step, setStep] = useState(0);
   const [vendorFormData, setVendorFormData] =
     useState<CombinedFormValues | null>(null);
   const [paymentFormData, setPaymentFormData] = useState<any>(null);
   const router = useRouter();
+  const queryClient = useQueryClient();
+
+  const {
+    data: vendors = [],
+    isLoading: isVendorsLoading,
+    error: vendorsError,
+    refetch: refetchVendors,
+  } = useAvailableVendors();
+
+  useEffect(() => {
+    // Refetch vendors when modal opens
+    if (isOpen) {
+      refetchVendors();
+    }
+  }, [isOpen, refetchVendors]);
 
   if (!userWalletAddress) {
     router.push("/");
@@ -41,6 +60,19 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
     setStep(0);
     setVendorFormData(null);
     setPaymentFormData(null);
+  };
+
+  const handleTransactionComplete = async () => {
+    // Invalidate and refetch balance queries
+    await queryClient.invalidateQueries({
+      queryKey: ["multisigBalance"],
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ["currency-conversion"],
+    });
+
+    // Reset modal state and close
+    handleClose();
   };
 
   const handleVendorSubmit = (data: CombinedFormValues) => {
@@ -69,6 +101,10 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
         <CombinedVendorForm
           userWalletAddress={userWalletAddress}
           onNext={handleVendorSubmit}
+          availableVendors={vendors}
+          isVendorsLoading={isVendorsLoading}
+          vendorsError={vendorsError instanceof Error ? vendorsError : null}
+          refetchVendors={refetchVendors}
         />
       ),
     },
@@ -79,6 +115,7 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
           onNext={handlePaymentSubmit}
           onBack={handleBack}
           vendorFormData={vendorFormData!}
+          userWalletAddress={userWalletAddress}
         />
       ),
     },
@@ -86,7 +123,7 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
       title: "3. Confirmation",
       component: (
         <Confirmation
-          onClose={onClose}
+          onClose={handleTransactionComplete}
           onBack={handleBack}
           vendorData={vendorFormData!}
           paymentData={paymentFormData}
@@ -101,8 +138,23 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
       : ((step + 1) / steps.length) * 100;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleClose();
+        }
+      }}
+    >
+      <DialogContent
+        className="w-full max-w-[90%] h-[90vh] p-0 flex flex-col"
+        onPointerDownOutside={(e) => {
+          e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+        }}
+      >
         <div className="p-6 pb-0">
           <DialogHeader>
             <DialogTitle className="text-2xl">Create Transaction</DialogTitle>
