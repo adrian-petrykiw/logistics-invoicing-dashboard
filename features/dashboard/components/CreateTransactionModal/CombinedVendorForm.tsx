@@ -265,12 +265,18 @@ const CombinedVendorForm = ({
             {selectedVendor && vendorDetails && (
               <div className="space-y-4">
                 <div className="space-y-4">
-                  <div className="flex mb-[-12px]">
-                    <div className="w-[50%]">
+                  <div className="flex mb-[-12px] gap-6">
+                    <div className="w-[50%] ">
                       <FormLabel>Invoices</FormLabel>
                     </div>
-                    <div className="w-[50%]">
-                      <FormLabel className="text-sm text-muted-foreground ml-4">
+                    <div
+                      className={`w-[50%]  ${
+                        fields.length > 1 ? `mr-[3px]` : `mr-16`
+                      }`}
+                    >
+                      <FormLabel
+                        className={`text-sm text-muted-foreground w-full flex `}
+                      >
                         Amount (USDC)
                       </FormLabel>
                     </div>
