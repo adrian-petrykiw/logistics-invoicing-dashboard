@@ -103,7 +103,7 @@ export default function DashboardPage() {
         <h1 className="text-lg font-semibold text-tertiary mb-0">
           Account Info
         </h1>
-        <div className="flex flex-row gap-2">
+        <div className="flex flex-row gap-4">
           <Button
             onClick={() => setIsCreateModalOpen(true)}
             className="bg-lightgray text-quaternary hover:bg-darkgray shadow"

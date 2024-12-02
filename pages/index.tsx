@@ -57,7 +57,7 @@ export default function LandingPage() {
           <FeatureCard
             icon={<FiZap className="w-8 h-8" />}
             title="Fast"
-            description="Process international payments in minutes no matter the time or day"
+            description="Process international payments in seconds no matter the time or day"
           />
           <FeatureCard
             icon={<FiDollarSign className="w-8 h-8" />}
