@@ -53,6 +53,7 @@ import { PublicKey } from "@solana/web3.js";
 import { InvoiceFileUpload } from "@/components/InvoiceFileUpload";
 import { useFileUpload } from "@/hooks/useFileUpload";
 import toast from "react-hot-toast";
+import { Textarea } from "@/components/ui/textarea";
 
 interface CreatePaymentLinkModalProps {
   isOpen: boolean;
@@ -547,13 +548,16 @@ export function CreatePaymentLinkModal({
                   <FormItem>
                     <FormLabel>Additional Notes</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter additional notes" {...field} />
+                      <Textarea
+                        placeholder="Enter additional notes"
+                        className="min-h-[60px]"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-
               <div className="flex flex-row gap-6 w-[100%]">
                 <div className="flex flex-1 items-stretch w-[100%]">
                   <FormField

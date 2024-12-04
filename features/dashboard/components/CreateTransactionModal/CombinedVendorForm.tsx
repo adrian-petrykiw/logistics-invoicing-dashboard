@@ -375,10 +375,10 @@ const CombinedVendorForm = ({
                   name="additionalInfo"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Additional Information</FormLabel>
+                      <FormLabel>Additional Notes</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="Enter any additional information"
+                          placeholder="Enter additional notes"
                           className="min-h-[60px]"
                           {...field}
                         />

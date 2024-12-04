@@ -1,4 +1,3 @@
-// components/ParticleButtonContent.tsx
 import { useWallet } from "@solana/wallet-adapter-react";
 import { Button } from "@/components/ui/button";
 import { WalletName } from "@solana/wallet-adapter-base";
@@ -79,16 +78,13 @@ const ParticleButtonContent = () => {
             <ChevronDown className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-48 p-2">
+        <PopoverContent
+          className="w-48 p-2"
+          align="end"
+          side="bottom"
+          sideOffset={4}
+        >
           <div className="flex flex-col gap-1">
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 justify-start"
-              onClick={handleRegister}
-            >
-              <Store className="h-4 w-4" />
-              <span>Register Vendor</span>
-            </Button>
             <Button
               variant="ghost"
               className="flex items-center gap-2 justify-start"
