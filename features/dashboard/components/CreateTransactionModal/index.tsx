@@ -157,7 +157,7 @@ export const CreateTransactionModal: React.FC<CreateTransactionModalProps> = ({
       >
         <div className="p-6 pb-0">
           <DialogHeader>
-            <DialogTitle className="text-2xl">Create Transaction</DialogTitle>
+            <DialogTitle className="text-xl">Create Transaction</DialogTitle>
           </DialogHeader>
 
           <div className="flex space-x-4 justify-between w-full mt-4">

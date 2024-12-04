@@ -99,10 +99,10 @@ export function CreatePaymentLinkModal({
   const { uploadFiles } = useFileUpload(organization?.id || "");
 
   const filteredVendors = [
+    { id: "new", name: "+ SEND TO A NEW VENDOR", email: "" },
     ...availableVendors.filter((vendor) =>
       vendor.name.toLowerCase().includes(query.toLowerCase())
     ),
-    { id: "new", name: "+ Send to new vendor", email: "" },
   ];
 
   const form = useForm<FormValues>({
@@ -290,7 +290,7 @@ export function CreatePaymentLinkModal({
                             }`}
                           >
                             {field.value === "new"
-                              ? "+ Send to new vendor"
+                              ? "+ SEND TO A NEW VENDOR"
                               : field.value
                               ? availableVendors.find(
                                   (vendor) => vendor.id === field.value
@@ -607,7 +607,7 @@ export function CreatePaymentLinkModal({
               </div>
 
               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create Payment Request"}
+                {isSubmitting ? "Creating..." : "Create"}
               </Button>
             </div>
           </form>

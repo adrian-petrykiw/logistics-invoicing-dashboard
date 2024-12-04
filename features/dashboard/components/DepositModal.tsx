@@ -361,7 +361,7 @@ export function DepositModal() {
         <DialogHeader>
           <DialogTitle>Deposit Funds</DialogTitle>
           <DialogDescription>
-            Add funds to your multisig vault using your debit/credit card.
+            Fund your account balance with your debit/credit card.
           </DialogDescription>
         </DialogHeader>
 
