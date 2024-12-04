@@ -514,6 +514,32 @@ export function Confirmation({
 
             // Store transaction data after final transaction
             if (isAtomic || index === transactions.length - 1) {
+              // const transactionData: CreateTransactionDTO = {
+              //   organization_id: organization?.id!,
+              //   signature,
+              //   token_mint: USDC_MINT.toString(),
+              //   proof_data: {
+              //     encryption_keys: {
+              //       [invoice.number]: encryptionKeys[invoice.number],
+              //     },
+              //     payment_hashes: {
+              //       [invoice.number]: paymentHashes[invoice.number],
+              //     },
+              //   },
+              //   amount: invoice.amount,
+              //   transaction_type: "payment",
+              //   sender: {
+              //     multisig_address: senderMultisigPda.toString(),
+              //     vault_address: senderVaultPda.toString(),
+              //     wallet_address: publicKey.toString(),
+              //   },
+              //   recipient: {
+              //     multisig_address: vendorInfo.multisigAddress,
+              //     vault_address: vendorInfo.vaultAddress,
+              //   },
+              //   invoices: [{ number: invoice.number, amount: invoice.amount }],
+              // };
+
               const transactionData: CreateTransactionDTO = {
                 organization_id: organization?.id!,
                 signature,
@@ -538,6 +564,9 @@ export function Confirmation({
                   vault_address: vendorInfo.vaultAddress,
                 },
                 invoices: [{ number: invoice.number, amount: invoice.amount }],
+                status: "confirmed",
+                restricted_payment_methods: [],
+                metadata: {},
               };
 
               const response = await fetch("/api/transactions/store", {
@@ -1034,6 +1063,9 @@ export function Confirmation({
                 number: inv.number,
                 amount: inv.amount,
               })),
+              status: "confirmed",
+              restricted_payment_methods: [],
+              metadata: {},
             };
 
             const response = await fetch("/api/transactions/store", {

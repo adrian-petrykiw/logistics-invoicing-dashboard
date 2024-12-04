@@ -27,6 +27,8 @@ import {
   HandCoins,
   Receipt,
 } from "lucide-react";
+import { CreatePaymentLinkModal } from "@/features/dashboard/components/CreatePaymentLinkModal";
+import { useQuery } from "@tanstack/react-query";
 
 // Dynamic imports for components that use Solana
 const CreateTransactionModal = dynamic(
@@ -44,6 +46,16 @@ const YieldPeriodSelect = dynamic(
   { ssr: false }
 );
 
+const useAvailableVendors = () => {
+  return useQuery({
+    queryKey: ["vendors"],
+    queryFn: async () => {
+      // Replace with your actual API call
+      return [] as Array<{ id: string; name: string; email: string }>;
+    },
+  });
+};
+
 export default function DashboardPage() {
   const [yieldPeriod, setYieldPeriod] = useState<YieldPeriod>("ytd");
   //   const { multisig, isLoading } = useSquadsWallet();
@@ -51,6 +63,9 @@ export default function DashboardPage() {
   const { connected, publicKey } = useWallet();
   const { user, isAuthenticated, isLoading } = useAuthContext();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isPaymentRequestModalOpen, setIsPaymentRequestModalOpen] =
+    useState(false);
+  const { data: availableVendors = [] } = useAvailableVendors();
 
   console.log("Dashboard state:", {
     connected,
@@ -105,12 +120,12 @@ export default function DashboardPage() {
         </h1>
         <div className="flex flex-row gap-4">
           <Button
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={() => setIsPaymentRequestModalOpen(true)}
             className="bg-lightgray text-quaternary hover:bg-darkgray shadow"
           >
             <LuArrowDownToLine />
             Request Payment
-          </Button>{" "}
+          </Button>
           <Button
             onClick={() => setIsCreateModalOpen(true)}
             className="bg-tertiary text-primary hover:bg-quaternary shadow"
@@ -164,6 +179,13 @@ export default function DashboardPage() {
       <CreateTransactionModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        userWalletAddress={walletAddress}
+        userEmail={email}
+      />
+
+      <CreatePaymentLinkModal
+        isOpen={isPaymentRequestModalOpen}
+        onClose={() => setIsPaymentRequestModalOpen(false)}
         userWalletAddress={walletAddress}
         userEmail={email}
       />

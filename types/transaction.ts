@@ -21,13 +21,30 @@ export interface Invoice {
   proof?: InvoiceProofData; // For internal use during transaction creation
 }
 
+export type TransactionStatus =
+  | "draft" // Initial payment request state
+  | "pending" // Payment requested, not yet paid
+  | "processing" // Payment is being processed
+  | "confirmed" // Transaction confirmed on chain
+  | "finalized" // Transaction finalized on chain
+  | "failed" // Transaction failed
+  | "expired"; // Payment request expired
+
+// Add supported payment methods
+export type PaymentMethod =
+  | "wire"
+  | "ach"
+  | "credit_balance"
+  | "debit_card"
+  | "credit_card";
+
 export interface TransactionRecord {
   id: string;
   organization_id: string;
   signature: string;
   token_mint: string;
   proof_data: ProofData;
-  status: "pending" | "confirmed" | "failed";
+  status: TransactionStatus;
   amount: number;
   transaction_type: "payment" | "transfer" | "other";
   sender: TransactionParty;
@@ -36,13 +53,30 @@ export interface TransactionRecord {
   created_at: string;
   updated_at: string;
   created_by: string;
+  due_date?: string;
+  restricted_payment_methods?: PaymentMethod[]; // Changed from allowed_payment_methods
+  metadata?: {
+    payment_request?: {
+      requester_info?: {
+        name: string;
+        email: string;
+        company: string;
+        address?: string;
+        phone?: string;
+      };
+      notes?: string;
+      custom_fields?: Record<string, any>;
+    };
+  };
 }
 
 export interface CreateTransactionDTO
   extends Omit<
     TransactionRecord,
-    "id" | "created_at" | "updated_at" | "status" | "created_by"
-  > {}
+    "id" | "created_at" | "updated_at" | "created_by"
+  > {
+  status: TransactionStatus;
+}
 
 export interface ApiError {
   error: string;

@@ -1,0 +1,8 @@
+[
+    {
+        "origin": ["http://localhost:3000", "https://dev.cargobill.co", "https://cargobill.co"],
+        "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+        "responseHeader": ["Content-Type", "Content-Length", "ETag"],
+        "maxAgeSeconds": 3600
+    }
+]

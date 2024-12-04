@@ -189,15 +189,7 @@ export default function SettingsPage() {
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-6">
                   <div className="col-span-2">
-                    {/* <Card className="bg-muted/50">
-                      <CardHeader className="pb-0 mb-2">
-                        <CardTitle className="text-sm">
-                          {organization.business_details?.companyName}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className=""></CardContent>
-                    </Card> */}
-                    <div className="p-4 border-gray-200 border-[1px] rounded-lg">
+                    <div className="p-4 border-gray-200 border-[1px] rounded-sm">
                       <h4 className="text-sm font-semibold">
                         {" "}
                         {organization.business_details?.companyName}
@@ -338,7 +330,7 @@ export default function SettingsPage() {
                         {[1, 2, 3].map((i) => (
                           <Skeleton
                             key={i}
-                            className="h-24 w-full rounded-lg"
+                            className="h-24 w-full rounded-sm"
                           />
                         ))}
                       </div>
@@ -348,7 +340,7 @@ export default function SettingsPage() {
                       members?.map((member: OrganizationMemberResponse) => (
                         <div
                           key={member.user_id}
-                          className="flex items-center justify-between p-4 border border-gray-300 rounded-lg"
+                          className="flex items-center justify-between p-4 border border-gray-300 rounded-sm"
                         >
                           <div className="flex flex-row justify-between items-center w-full mr-4">
                             <div>
@@ -444,7 +436,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2">
                     {[1, 2].map((i) => (
-                      <Skeleton key={i} className="h-24 w-full rounded-lg" />
+                      <Skeleton key={i} className="h-24 w-full rounded-sm" />
                     ))}
                   </div>
                 </div>

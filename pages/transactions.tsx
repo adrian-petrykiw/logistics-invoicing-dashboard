@@ -171,7 +171,7 @@ export default function TransactionsPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-quaternary">
+                <TableCell colSpan={7} className="text-center text-quaternary">
                   {isLoading
                     ? "Loading transactions..."
                     : "No transactions found"}
