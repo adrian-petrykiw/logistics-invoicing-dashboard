@@ -8,7 +8,26 @@ import { createPaymentRequestEmailHtml } from "./email-templates";
 import { z } from "zod";
 
 const PaymentRequestSchema = z.object({
-  organization_id: z.string().uuid(),
+  organization: z
+    .object({
+      id: z.string().uuid().optional(),
+      name: z.string().optional(),
+      email: z.string().email().optional(),
+    })
+    .refine(
+      (data) => {
+        return (
+          (data.id !== undefined && !data.name && !data.email) ||
+          (data.id === undefined &&
+            data.name !== undefined &&
+            data.email !== undefined)
+        );
+      },
+      {
+        message:
+          "Either provide organization.id OR both organization.name and organization.email, but not both",
+      }
+    ),
   token_mint: z.string(),
   amount: z.number(),
   sender: z.object({
@@ -16,10 +35,12 @@ const PaymentRequestSchema = z.object({
     multisig_address: z.string(),
     vault_address: z.string(),
   }),
-  recipient: z.object({
-    name: z.string(),
-    email: z.string().email(),
-  }),
+  recipient: z
+    .object({
+      multisig_address: z.string(),
+      vault_address: z.string(),
+    })
+    .optional(),
   invoices: z.array(
     z.object({
       number: z.string(),
@@ -42,35 +63,74 @@ async function handler(
     });
   }
 
+  // Get the user from the database
+  const { data: user } = await supabaseAdmin
+    .from("users")
+    .select("id")
+    .eq("wallet_address", req.user.walletAddress)
+    .single();
+
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      error: { error: "User not found", code: "USER_NOT_FOUND" },
+    });
+  }
+
   try {
     const input = PaymentRequestSchema.parse(req.body);
+    let recipientOrgId: string;
 
-    // Fetch organization details for sender email
-    const { data: organization, error: orgError } = await supabaseAdmin
-      .from("organizations")
-      .select("business_details")
-      .eq("id", input.organization_id)
-      .single();
+    // Handle organization
+    if (!input.organization.id) {
+      // Create placeholder organization for new vendor
+      const { data: newOrg, error: newOrgError } = await supabaseAdmin
+        .from("organizations")
+        .insert({
+          name: input.organization.name!,
+          multisig_wallet: "pending",
+          business_details: {
+            companyName: input.organization.name!,
+            companyEmail: input.organization.email!,
+            ownerName: "Pending Registration",
+            ownerEmail: input.organization.email!,
+            ownerWalletAddress: "pending",
+          },
+          created_by: user.id,
+        })
+        .select()
+        .single();
 
-    if (orgError) throw orgError;
-    if (!organization?.business_details?.companyEmail) {
-      throw new Error("Organization email not found");
+      if (newOrgError) throw newOrgError;
+      recipientOrgId = newOrg.id;
+    } else {
+      // Verify existing organization
+      const { data: existingOrg, error: orgError } = await supabaseAdmin
+        .from("organizations")
+        .select("id")
+        .eq("id", input.organization.id)
+        .single();
+
+      if (orgError || !existingOrg) {
+        throw new Error("Organization not found");
+      }
+      recipientOrgId = input.organization.id;
     }
 
-    const senderEmail = organization.business_details.companyEmail;
-
-    // Create transaction record with payment request status
-    const { data: transaction, error } = await supabaseAdmin
+    // Create transaction record
+    const { data: transaction, error: transError } = await supabaseAdmin
       .from("transactions")
       .insert({
-        organization_id: input.organization_id,
-        signature: "pending",
+        organization_id: recipientOrgId,
+        signature: `pending_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`,
         token_mint: input.token_mint,
         amount: input.amount,
         transaction_type: "payment",
         status: "draft",
         sender: input.sender,
-        recipient: {
+        recipient: input.recipient || {
           multisig_address: "pending",
           vault_address: "pending",
         },
@@ -79,14 +139,10 @@ async function handler(
         restricted_payment_methods: input.restricted_payment_methods || [],
         metadata: {
           payment_request: {
-            recipient_info: input.recipient,
             notes: input.notes,
           },
-          sender_email: senderEmail,
         },
-        created_by: req.user.id,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        created_by: user.id,
         proof_data: {
           encryption_keys: {},
           payment_hashes: {},
@@ -95,29 +151,48 @@ async function handler(
       .select()
       .single();
 
-    if (error) throw error;
+    if (transError) throw transError;
 
+    // Handle email notifications
     try {
-      await emailService.sendEmail(
-        senderEmail,
-        "Payment Request Created",
-        createPaymentRequestEmailHtml({
-          type: "requester",
-          paymentRequest: transaction,
-        })
-      );
+      // Get recipient organization details
+      const { data: recipientOrg } = await supabaseAdmin
+        .from("organizations")
+        .select("business_details")
+        .eq("id", recipientOrgId)
+        .single();
 
-      await emailService.sendEmail(
-        input.recipient.email,
-        "New Payment Request",
-        createPaymentRequestEmailHtml({
-          type: "recipient",
-          paymentRequest: transaction,
-        })
-      );
+      if (recipientOrg?.business_details?.companyEmail) {
+        await emailService.sendEmail(
+          recipientOrg.business_details.companyEmail,
+          "New Payment Request",
+          createPaymentRequestEmailHtml({
+            type: "recipient",
+            paymentRequest: transaction,
+          })
+        );
+      }
+
+      // Get sender organization details
+      const { data: senderOrg } = await supabaseAdmin
+        .from("organizations")
+        .select("business_details")
+        .eq("id", transaction.organization_id)
+        .single();
+
+      if (senderOrg?.business_details?.companyEmail) {
+        await emailService.sendEmail(
+          senderOrg.business_details.companyEmail,
+          "Payment Request Created",
+          createPaymentRequestEmailHtml({
+            type: "requester",
+            paymentRequest: transaction,
+          })
+        );
+      }
     } catch (emailError: any) {
       console.error("Failed to send email notifications:", emailError);
-      throw Error("Failed to send email notifications:", emailError);
+      // Continue even if emails fail
     }
 
     return res.status(201).json({

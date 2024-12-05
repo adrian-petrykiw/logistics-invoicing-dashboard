@@ -54,6 +54,7 @@ import { InvoiceFileUpload } from "@/components/InvoiceFileUpload";
 import { useFileUpload } from "@/hooks/useFileUpload";
 import toast from "react-hot-toast";
 import { Textarea } from "@/components/ui/textarea";
+import { useVendorInfo } from "@/hooks/useVendorInfo";
 
 interface CreatePaymentLinkModalProps {
   isOpen: boolean;
@@ -97,6 +98,8 @@ export function CreatePaymentLinkModal({
     useVendorSelection(selectedVendor);
   const { organization } = useOrganization(userWalletAddress);
   const { uploadFiles } = useFileUpload(organization?.id || "");
+  const { data: vendorInfo } = useVendorInfo(selectedVendor);
+  const { user } = useAuth();
 
   const filteredVendors = [
     { id: "new", name: "+ SEND TO A NEW VENDOR", email: "" },
@@ -161,6 +164,9 @@ export function CreatePaymentLinkModal({
       if (!organization) {
         throw new Error("No organization found for user");
       }
+      if (!user) {
+        throw new Error("User must be authenticated");
+      }
 
       let vaultAddress: string;
       try {
@@ -176,41 +182,42 @@ export function CreatePaymentLinkModal({
       }
 
       const paymentRequestData = {
-        organization_id: organization.id,
-        signature: "pending",
+        organization:
+          selectedVendor === "new"
+            ? {
+                name: data.recipient.name,
+                email: data.recipient.email,
+              }
+            : {
+                id: selectedVendor,
+              },
         token_mint: USDC_MINT,
         amount: data.invoices.reduce((sum, inv) => sum + inv.amount, 0),
-        transaction_type: "payment",
-        status: "draft",
         sender: {
           wallet_address: userWalletAddress,
           multisig_address: organization.multisig_wallet,
           vault_address: vaultAddress,
         },
-        recipient: {
-          multisig_address: "pending",
-          vault_address: "pending",
-        },
-        invoices: data.invoices.map(({ files, ...invoice }) => invoice), // Remove files from initial request
+        recipient: vendorInfo
+          ? {
+              multisig_address: vendorInfo.multisigAddress,
+              vault_address: vendorInfo.vaultAddress,
+            }
+          : undefined,
+        invoices: data.invoices.map(({ files, ...invoice }) => invoice),
         due_date: data.due_date.toISOString(),
         restricted_payment_methods: data.restricted_payment_methods,
-        metadata: {
-          payment_request: {
-            recipient_info: data.recipient,
-            notes: data.notes,
-          },
-        },
-        proof_data: {
-          encryption_keys: {},
-          payment_hashes: {},
-        },
+        notes: data.notes,
       };
 
       // Create the transaction first
-      const response = await fetch("/api/transactions/create", {
+      const response = await fetch("/api/payment-requests/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-user-email": user.email,
+          "x-wallet-address": user.walletAddress,
+          "x-user-info": JSON.stringify(user.userInfo),
         },
         body: JSON.stringify(paymentRequestData),
       });
@@ -235,7 +242,12 @@ export function CreatePaymentLinkModal({
             // Update the transaction with file URLs
             await fetch(`/api/transactions/${transactionId}`, {
               method: "PATCH",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                "x-user-email": user.email,
+                "x-wallet-address": user.walletAddress,
+                "x-user-info": JSON.stringify(user.userInfo),
+              },
               body: JSON.stringify({
                 invoices: data.invoices.map((inv) =>
                   inv.number === invoice.number
