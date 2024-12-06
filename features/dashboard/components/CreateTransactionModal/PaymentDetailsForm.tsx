@@ -114,7 +114,9 @@ export function PaymentDetailsForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="credit">Available Credit</SelectItem>
+                        <SelectItem value="account_credit">
+                          Available Credit
+                        </SelectItem>
                         <SelectItem value="ach">ACH Transfer</SelectItem>
                         <SelectItem value="wire">Wire Transfer</SelectItem>
                         <SelectItem value="credit_card">Credit Card</SelectItem>

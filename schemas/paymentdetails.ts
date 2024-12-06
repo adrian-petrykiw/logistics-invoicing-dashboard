@@ -1,13 +1,5 @@
 import { z } from "zod";
 
-// export const paymentMethodSchema = z.enum([
-//   "credit",
-//   "ach",
-//   "wire",
-//   "credit_card",
-//   "debit_card",
-// ]);
-
 export const paymentDetailsSchema = z.discriminatedUnion("paymentMethod", [
   z.object({
     paymentMethod: z.literal("account_credit"),

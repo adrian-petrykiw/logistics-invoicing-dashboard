@@ -34,7 +34,7 @@ export type TransactionStatus =
 export type PaymentMethod =
   | "wire"
   | "ach"
-  | "credit_balance"
+  | "account_credit"
   | "debit_card"
   | "credit_card";
 

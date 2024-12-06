@@ -54,6 +54,7 @@ import {
   transactionMessageToVaultMessage,
   vaultTransactionExecuteSync,
 } from "@/utils/squads";
+import { formatPaymentMethod } from "@/utils/payment";
 
 const heliusConnection = new Connection(
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL!,
@@ -1285,7 +1286,7 @@ export function Confirmation({
             <div>
               <p className="font-medium text-sm mb-2">Payment Method</p>
               <p className="text-sm text-muted-foreground">
-                {paymentData.paymentMethod.toLocaleUpperCase()}
+                {formatPaymentMethod(paymentData.paymentMethod)}
               </p>
             </div>
             <div>
