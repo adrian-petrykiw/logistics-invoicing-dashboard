@@ -47,8 +47,7 @@ export default function LandingPage() {
             Logistics Payments Made Better
           </h1>
           <p className="text-lg text-quaternary">
-            Send & receive invoice payments in minutes for less than a penny
-            anywhere in the world
+            Send & receive supply payments in seconds anywhere in the world
           </p>
         </div>
 
@@ -57,17 +56,17 @@ export default function LandingPage() {
           <FeatureCard
             icon={<FiZap className="w-8 h-8" />}
             title="Fast"
-            description="Process international payments in seconds no matter the time or day"
+            description="Process cross-border payments in seconds, any time, any day!"
           />
           <FeatureCard
             icon={<FiDollarSign className="w-8 h-8" />}
-            title="Low Fee"
-            description="Simple $5 fee on payments over $10,000, flat 0.5% under"
+            title="Cheap"
+            description="Simple $5 fee on payments over $10,000, flat 0.5% under!"
           />
           <FeatureCard
             icon={<FiLock className="w-8 h-8" />}
             title="Secure"
-            description="Fully own your account! Set spending limits, customize MFA authentication, batch invoices, and manage team permissions from one easy to use dashboard"
+            description="Set spending limits, customize MFA, batch invoices, and manage your team's permissions!"
           />
         </div>
       </main>
