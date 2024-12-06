@@ -28,6 +28,7 @@ const PaymentRequestSchema = z.object({
           "Either provide organization.id OR both organization.name and organization.email, but not both",
       }
     ),
+  creator_email: z.string().email(),
   token_mint: z.string(),
   amount: z.number(),
   sender: z.object({
@@ -80,6 +81,7 @@ async function handler(
   try {
     const input = PaymentRequestSchema.parse(req.body);
     let recipientOrgId: string;
+    let recipientEmail: string;
 
     // Handle organization
     if (!input.organization.id) {
@@ -103,18 +105,24 @@ async function handler(
 
       if (newOrgError) throw newOrgError;
       recipientOrgId = newOrg.id;
+      recipientEmail = input.organization.email!;
     } else {
-      // Verify existing organization
+      // Fetch existing organization's details
       const { data: existingOrg, error: orgError } = await supabaseAdmin
         .from("organizations")
-        .select("id")
+        .select("id, business_details")
         .eq("id", input.organization.id)
         .single();
 
       if (orgError || !existingOrg) {
         throw new Error("Organization not found");
       }
-      recipientOrgId = input.organization.id;
+      if (!existingOrg.business_details?.companyEmail) {
+        throw new Error("Organization email not found");
+      }
+
+      recipientOrgId = existingOrg.id;
+      recipientEmail = existingOrg.business_details.companyEmail;
     }
 
     // Create transaction record
@@ -140,6 +148,7 @@ async function handler(
         metadata: {
           payment_request: {
             notes: input.notes,
+            creator_email: input.creator_email,
           },
         },
         created_by: user.id,
@@ -155,41 +164,25 @@ async function handler(
 
     // Handle email notifications
     try {
-      // Get recipient organization details
-      const { data: recipientOrg } = await supabaseAdmin
-        .from("organizations")
-        .select("business_details")
-        .eq("id", recipientOrgId)
-        .single();
+      // Send email to recipient organization
+      await emailService.sendEmail(
+        recipientEmail,
+        "New Payment Request",
+        createPaymentRequestEmailHtml({
+          type: "recipient",
+          paymentRequest: transaction,
+        })
+      );
 
-      if (recipientOrg?.business_details?.companyEmail) {
-        await emailService.sendEmail(
-          recipientOrg.business_details.companyEmail,
-          "New Payment Request",
-          createPaymentRequestEmailHtml({
-            type: "recipient",
-            paymentRequest: transaction,
-          })
-        );
-      }
-
-      // Get sender organization details
-      const { data: senderOrg } = await supabaseAdmin
-        .from("organizations")
-        .select("business_details")
-        .eq("id", transaction.organization_id)
-        .single();
-
-      if (senderOrg?.business_details?.companyEmail) {
-        await emailService.sendEmail(
-          senderOrg.business_details.companyEmail,
-          "Payment Request Created",
-          createPaymentRequestEmailHtml({
-            type: "requester",
-            paymentRequest: transaction,
-          })
-        );
-      }
+      // Send confirmation email to creator
+      await emailService.sendEmail(
+        input.creator_email,
+        "Payment Request Created",
+        createPaymentRequestEmailHtml({
+          type: "requester",
+          paymentRequest: transaction,
+        })
+      );
     } catch (emailError: any) {
       console.error("Failed to send email notifications:", emailError);
       // Continue even if emails fail

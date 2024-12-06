@@ -182,6 +182,7 @@ export function CreatePaymentLinkModal({
       }
 
       const paymentRequestData = {
+        creator_email: organization.business_details.companyEmail,
         organization:
           selectedVendor === "new"
             ? {

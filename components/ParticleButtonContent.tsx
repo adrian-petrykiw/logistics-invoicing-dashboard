@@ -19,12 +19,17 @@ const ParticleButtonContent = () => {
   const handleParticleConnect = useCallback(async () => {
     if (!connected && !connecting) {
       try {
+        // Force disconnect any other wallets first
+        await disconnect();
+        // Small delay to ensure clean state
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        // Then connect Particle
         await select("Particle" as WalletName);
       } catch (error) {
         console.error("Connection error:", error);
       }
     }
-  }, [connected, connecting, select]);
+  }, [connected, connecting, select, disconnect]);
 
   useEffect(() => {
     if (connected && wallet?.adapter.name === "Particle") {

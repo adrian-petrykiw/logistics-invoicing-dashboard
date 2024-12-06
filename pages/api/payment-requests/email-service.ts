@@ -23,7 +23,6 @@ class EmailService {
       "GMAIL_CLIENT_SECRET",
       "GMAIL_REDIRECT_URI",
       "GMAIL_REFRESH_TOKEN",
-      "EMAIL_USER",
       "EMAIL_FROM",
     ];
 
@@ -47,7 +46,7 @@ class EmailService {
         secure: true,
         auth: {
           type: "OAuth2",
-          user: process.env.EMAIL_USER,
+          user: process.env.EMAIL_FROM,
           clientId: process.env.GMAIL_CLIENT_ID,
           clientSecret: process.env.GMAIL_CLIENT_SECRET,
           refreshToken: process.env.GMAIL_REFRESH_TOKEN,

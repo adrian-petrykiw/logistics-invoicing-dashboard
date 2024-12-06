@@ -76,16 +76,15 @@ export default function DashboardPage() {
     wallet: window?.particle?.auth?.getUserInfo(),
   });
 
-  // Modified navigation logic
   useEffect(() => {
     const checkAuth = async () => {
-      if (!isLoading && !isAuthenticated) {
+      if (!isLoading && !isAuthenticated && !connected) {
         console.log("Redirecting to home - not authenticated");
         router.push("/");
       }
     };
     checkAuth();
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, connected, router]);
 
   // Show loading while we're checking auth status
   if (isLoading || !connected) {

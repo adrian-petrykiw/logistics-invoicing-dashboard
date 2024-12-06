@@ -4,8 +4,7 @@ import {
   WalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { clusterApiUrl } from "@solana/web3.js";
-import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
+import { WalletError } from "@solana/wallet-adapter-base";
 import { ParticleAdapter } from "@solana/wallet-adapter-wallets";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import toast from "react-hot-toast";
@@ -46,14 +45,22 @@ const WalletProviderComponent: FC<PropsWithChildren> = ({ children }) => {
     []
   );
 
+  // Custom autoConnect function that only allows Particle
+  const handleAutoConnect = async (adapter: any) => {
+    return adapter.name === "Particle";
+  };
+
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider
-        autoConnect={true}
         wallets={wallets}
-        onError={(error) => {
-          console.error("Wallet error:", error);
-          toast.error("Wallet error: Please try reconnecting");
+        autoConnect={handleAutoConnect}
+        onError={(error: WalletError) => {
+          // Only show errors for Particle-related issues
+          if (error.name?.includes("Particle")) {
+            console.error("Wallet error:", error);
+            toast.error("Connection error: Please try again");
+          }
         }}
       >
         <WalletModalProvider>{children}</WalletModalProvider>

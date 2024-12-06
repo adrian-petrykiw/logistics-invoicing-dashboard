@@ -7,11 +7,14 @@ import { Toaster } from "react-hot-toast";
 import { QueryClient } from "@tanstack/react-query";
 import "@/styles/globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Dynamically import components that use browser APIs
 const DynamicWalletProvider = dynamic(
   () =>
-    import("@/components/providers/WalletProvider").then((mod) => mod.default),
+    import("@/components/providers/LocalWalletProvider").then(
+      (mod) => mod.default
+    ),
   {
     ssr: false,
     loading: () => null,
@@ -35,10 +38,9 @@ function MyApp({ Component, pageProps }: AppProps) {
         defaultOptions: {
           queries: {
             staleTime: 60 * 1000,
-            retry: 3,
-            retryDelay: 1000,
-            refetchOnWindowFocus: true,
-            refetchOnMount: true,
+            retry: false, // Disable retries
+            refetchOnWindowFocus: false, // Disable refetch on focus
+            refetchOnMount: false, // Disable refetch on mount
           },
         },
       })
@@ -46,7 +48,10 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   useEffect(() => {
     setIsMounted(true);
-  }, []);
+    return () => {
+      queryClient.clear(); // Cleanup on unmount
+    };
+  }, [queryClient]);
 
   if (!isMounted) {
     return null;
@@ -59,24 +64,28 @@ function MyApp({ Component, pageProps }: AppProps) {
       client={queryClient}
       dehydratedState={pageProps.dehydratedState}
     >
-      <DynamicWalletProvider>
-        <AuthProvider>
-          {isLandingPage ? (
-            <Component {...pageProps} />
-          ) : (
-            <DynamicLayout>
-              <Component {...pageProps} />
-            </DynamicLayout>
-          )}
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              className: "bg-tertiary text-primary",
-              duration: 4000,
-            }}
-          />
-        </AuthProvider>
-      </DynamicWalletProvider>
+      <ErrorBoundary>
+        {isMounted && (
+          <DynamicWalletProvider>
+            <AuthProvider>
+              {isLandingPage ? (
+                <Component {...pageProps} />
+              ) : (
+                <DynamicLayout>
+                  <Component {...pageProps} />
+                </DynamicLayout>
+              )}
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  className: "bg-tertiary text-primary",
+                  duration: 4000,
+                }}
+              />
+            </AuthProvider>
+          </DynamicWalletProvider>
+        )}
+      </ErrorBoundary>
     </ReactQueryProvider>
   );
 }
