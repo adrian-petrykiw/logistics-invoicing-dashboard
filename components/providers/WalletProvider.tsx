@@ -49,14 +49,11 @@ const WalletProviderComponent: FC<PropsWithChildren> = ({ children }) => {
   return (
     <ConnectionProvider endpoint={endpoint}>
       <WalletProvider
+        autoConnect={true}
         wallets={wallets}
-        autoConnect={true} // We can keep this true now
         onError={(error) => {
-          // Only show error if it's not from Phantom
-          if (!error.message?.includes("User rejected the request")) {
-            console.error("Wallet error:", error);
-            toast.error("Wallet error: Please try reconnecting");
-          }
+          console.error("Wallet error:", error);
+          toast.error("Wallet error: Please try reconnecting");
         }}
       >
         <WalletModalProvider>{children}</WalletModalProvider>

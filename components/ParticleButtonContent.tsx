@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ChevronDown, Settings, LogOut, Store } from "lucide-react";
+import toast from "react-hot-toast";
 
 const ParticleButtonContent = () => {
   const { select, connecting, connected, wallet, disconnect } = useWallet();
@@ -19,14 +20,18 @@ const ParticleButtonContent = () => {
   const handleParticleConnect = useCallback(async () => {
     if (!connected && !connecting) {
       try {
-        // Force disconnect any other wallets first
+        // Add initialization check
+        if (!window.particle?.auth) {
+          console.error("Particle auth not initialized");
+          return;
+        }
+
         await disconnect();
-        // Small delay to ensure clean state
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        // Then connect Particle
+        await new Promise((resolve) => setTimeout(resolve, 500)); // Increase delay
         await select("Particle" as WalletName);
       } catch (error) {
         console.error("Connection error:", error);
+        toast.error("Connection error!");
       }
     }
   }, [connected, connecting, select, disconnect]);

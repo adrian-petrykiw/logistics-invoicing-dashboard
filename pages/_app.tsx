@@ -7,26 +7,28 @@ import { Toaster } from "react-hot-toast";
 import { QueryClient } from "@tanstack/react-query";
 import "@/styles/globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { useParticleStore } from "@/services/particleAuth";
 
-// Dynamically import components that use browser APIs
 const DynamicWalletProvider = dynamic(
   () =>
     import("@/components/providers/WalletProvider").then((mod) => mod.default),
   {
     ssr: false,
-    loading: () => null,
+    loading: () => (
+      <div className="min-h-screen bg-primary flex items-center justify-center">
+        <div className="text-tertiary">Initializing wallet...</div>
+      </div>
+    ),
   }
 );
 
 const DynamicLayout = dynamic(
   () => import("@/components/Layout").then((mod) => mod.Layout),
-  {
-    ssr: true,
-    loading: () => null,
-  }
+  { ssr: true, loading: () => null }
 );
 
 function MyApp({ Component, pageProps }: AppProps) {
+  const { initialize, particle } = useParticleStore();
   const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
   const [queryClient] = useState(
@@ -45,11 +47,18 @@ function MyApp({ Component, pageProps }: AppProps) {
   );
 
   useEffect(() => {
+    if (typeof window !== "undefined" && !particle) {
+      initialize();
+    }
     setIsMounted(true);
-  }, []);
+  }, [initialize, particle]);
 
   if (!isMounted) {
-    return null;
+    return (
+      <div className="min-h-screen bg-primary flex items-center justify-center">
+        <div className="text-tertiary">Initializing application...</div>
+      </div>
+    );
   }
 
   const isLandingPage = router.pathname === "/";

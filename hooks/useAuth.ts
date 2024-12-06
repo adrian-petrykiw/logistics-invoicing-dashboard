@@ -4,10 +4,12 @@ import { AuthUser } from "@/types/auth";
 import { api } from "@/utils/api";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useCallback } from "react";
+import { useParticleStore } from "@/services/particleAuth";
 
 export function useAuth() {
   const queryClient = useQueryClient();
   const { connected, wallet, disconnect, publicKey } = useWallet();
+  const { particle } = useParticleStore();
 
   const {
     data: user,
@@ -16,13 +18,12 @@ export function useAuth() {
   } = useQuery({
     queryKey: ["auth", connected, publicKey?.toString()],
     queryFn: async (): Promise<AuthUser | null> => {
-      if (!connected || wallet?.adapter.name !== "Particle") {
+      if (!connected || wallet?.adapter.name !== "Particle" || !particle) {
         return null;
       }
 
       try {
-        // Using window.particle directly as it's already initialized
-        const userInfo = window.particle?.auth?.getUserInfo();
+        const userInfo = particle.auth.userInfo();
         if (!userInfo) return null;
 
         const email = userInfo.email || userInfo.google_email;
@@ -30,9 +31,8 @@ export function useAuth() {
 
         if (!email || !walletAddress) return null;
 
-        // Check invites
         try {
-          const response = await api.post(
+          const response = await api.post<{ invitesActivated: boolean }>(
             "auth/check-invites",
             {
               email,
@@ -52,33 +52,41 @@ export function useAuth() {
           }
         } catch (error) {
           console.error("Failed to check invites:", error);
-          // Don't fail auth if invites check fails
         }
 
         return {
           email,
           walletAddress,
           userInfo,
+          particleUserId: userInfo.uuid,
         };
       } catch (error) {
         console.error("Auth error:", error);
         return null;
       }
     },
-    enabled: connected && !!wallet && wallet.adapter.name === "Particle",
-    retry: 3,
-    retryDelay: 1000,
+    enabled:
+      connected && !!wallet && wallet.adapter.name === "Particle" && !!particle,
+    retry: (failureCount, error) => {
+      console.log("Auth retry attempt:", failureCount, error);
+      return failureCount < 3;
+    },
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     staleTime: 30000,
   });
 
   const logout = useCallback(async () => {
     try {
+      if (particle) {
+        await particle.auth.logout();
+      }
       await disconnect();
       queryClient.setQueryData(["auth"], null);
+      queryClient.clear();
     } catch (error) {
       console.error("Logout error:", error);
     }
-  }, [disconnect, queryClient]);
+  }, [disconnect, queryClient, particle]);
 
   return {
     user,
