@@ -64,7 +64,7 @@ export function PaymentDetailsForm({
   const form = useForm<PaymentDetailsFormValues>({
     resolver: zodResolver(paymentDetailsSchema),
     defaultValues: {
-      paymentMethod: "credit",
+      paymentMethod: "account_credit",
     },
   });
 
@@ -127,7 +127,7 @@ export function PaymentDetailsForm({
               />
             </div>
 
-            {selectedMethod === "credit" && (
+            {selectedMethod === "account_credit" && (
               <div className="pt-2">
                 <div className="text-sm text-muted-foreground">
                   Available credit balance:{" "}
