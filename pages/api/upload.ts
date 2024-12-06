@@ -10,7 +10,7 @@ export const config = {
 };
 
 const storage = new Storage({
-  projectId: process.env.GOOGLE_CLOUD_PROJECT,
+  projectId: process.env.GCP_PROJECT_ID,
   credentials: JSON.parse(process.env.GOOGLE_CLOUD_CREDENTIALS || ""),
 });
 
