@@ -262,7 +262,7 @@ export function CreatePaymentLinkModal({
       );
 
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Payment request created successfully");
+      toast.success("Payment request sent!");
       onClose();
     } catch (error) {
       console.error("Failed to create payment request:", error);
