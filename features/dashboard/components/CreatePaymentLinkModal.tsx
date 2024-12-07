@@ -133,6 +133,33 @@ export function CreatePaymentLinkModal({
     .watch("invoices")
     .reduce((sum, invoice) => sum + (invoice.amount || 0), 0);
 
+  // Add reset function
+  const resetFormState = () => {
+    form.reset({
+      vendor: "",
+      recipient: {
+        name: "",
+        email: "",
+      },
+      invoices: [{ number: "", amount: 0, files: [] }],
+      due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      restricted_payment_methods: [],
+      notes: "",
+    });
+    setSelectedVendor(null);
+    setIsNewVendor(false);
+    setQuery("");
+    setOpen(false);
+  };
+
+  // Updated dialog close handler
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      resetFormState();
+      onClose();
+    }
+  };
+
   const handleVendorSelection = (vendorId: string) => {
     if (vendorId === "new") {
       setIsNewVendor(true);
@@ -211,7 +238,6 @@ export function CreatePaymentLinkModal({
         notes: data.notes,
       };
 
-      // Create the transaction first
       const response = await fetch("/api/payment-requests/create", {
         method: "POST",
         headers: {
@@ -230,7 +256,6 @@ export function CreatePaymentLinkModal({
 
       const { id: transactionId } = await response.json();
 
-      // Upload files for each invoice
       await Promise.all(
         data.invoices.map(async (invoice) => {
           if (invoice.files?.length) {
@@ -240,7 +265,6 @@ export function CreatePaymentLinkModal({
               invoice.number
             );
 
-            // Update the transaction with file URLs
             await fetch(`/api/transactions/${transactionId}`, {
               method: "PATCH",
               headers: {
@@ -263,6 +287,7 @@ export function CreatePaymentLinkModal({
 
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success("Payment request sent!");
+      resetFormState(); // Reset form state on successful submission
       onClose();
     } catch (error) {
       console.error("Failed to create payment request:", error);
@@ -277,354 +302,393 @@ export function CreatePaymentLinkModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Create Payment Request</DialogTitle>
-        </DialogHeader>
+    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
+      <DialogContent
+        className="w-full max-w-[90%] h-[90vh] p-0 overflow-hidden flex flex-col"
+        onPointerDownOutside={(e) => {
+          e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          e.preventDefault();
+        }}
+      >
+        <div className="p-6 pb-2">
+          <DialogHeader>
+            <DialogTitle className="text-xl">
+              Create Payment Request
+            </DialogTitle>
+          </DialogHeader>
+        </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="space-y-4">
-              <FormField
-                control={form.control}
-                name="vendor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vendor/Biller</FormLabel>
-                    <Popover open={open} onOpenChange={setOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className={`w-full justify-between ${
-                              !field.value && "text-muted-foreground"
-                            }`}
-                          >
-                            {field.value === "new"
-                              ? "+ SEND TO A NEW VENDOR"
-                              : field.value
-                              ? availableVendors.find(
-                                  (vendor) => vendor.id === field.value
-                                )?.name
-                              : "Select vendor"}
-                            <CaretSortIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
-                        <Command>
-                          <CommandInput
-                            placeholder="Search vendors..."
-                            className="h-9"
-                            value={query}
-                            onValueChange={setQuery}
-                          />
-                          <CommandList>
-                            <CommandEmpty>No vendors found.</CommandEmpty>
-                            <CommandGroup>
-                              {vendorsLoading ? (
-                                <div className="p-4">
-                                  <Skeleton className="h-5 w-full" />
-                                </div>
-                              ) : (
-                                filteredVendors.map((vendor) => (
-                                  <CommandItem
-                                    key={vendor.id}
-                                    value={vendor.id}
-                                    onSelect={() =>
-                                      handleVendorSelection(vendor.id)
-                                    }
-                                  >
-                                    {vendor.name}
-                                    <CheckIcon
-                                      className={`ml-auto h-4 w-4 ${
-                                        vendor.id === field.value
-                                          ? "opacity-100"
-                                          : "opacity-0"
-                                      }`}
-                                    />
-                                  </CommandItem>
-                                ))
-                              )}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {selectedVendor && (
-                <Card className="bg-muted/50">
-                  <CardContent className="p-4">
-                    {isNewVendor ? (
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name="recipient.name"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input
-                                  placeholder="Enter vendor name"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name="recipient.email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input
-                                  type="email"
-                                  placeholder="Enter vendor email"
-                                  {...field}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    ) : vendorDetailsLoading ? (
-                      <div className="space-y-1 p-0 m-0">
-                        <Skeleton className="h-[14px] w-[250px]" />
-                        <Skeleton className="h-[12px] w-[200px]" />
-                        <Skeleton className="h-[12px] w-[150px]" />
-                      </div>
-                    ) : vendorDetails ? (
-                      <div className="p-0 m-0">
-                        <h4 className="font-semibold text-sm">
-                          {vendorDetails.business_details.companyName}
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                          {vendorDetails.business_details.companyAddress}
-                        </p>
-                        <div className="flex w-full">
-                          <p className="text-xs text-muted-foreground">
-                            {vendorDetails.business_details.companyPhone}
-                          </p>
-                          <p className="text-xs text-muted-foreground ml-4">
-                            {vendorDetails.business_details.companyEmail}
-                          </p>
-                        </div>
-                      </div>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              )}
-
-              <div className="space-y-4">
-                <div className="flex mb-[-12px] gap-6">
-                  <div className="w-[40%]">
-                    <FormLabel>Invoice</FormLabel>
-                  </div>
-                  <div className="w-[30%]">
-                    <FormLabel className="text-sm text-muted-foreground">
-                      Amount (USDC)
-                    </FormLabel>
-                  </div>
-                </div>
-                {form.watch("invoices").map((_, index) => (
-                  <div key={index} className="space-y-2">
-                    <div className="flex gap-6 w-full items-start">
-                      <FormField
-                        control={form.control}
-                        name={`invoices.${index}.number`}
-                        render={({ field }) => (
-                          <FormItem className="w-[40%]">
-                            <FormControl>
-                              <Input placeholder="Enter invoice #" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`invoices.${index}.amount`}
-                        render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormControl>
-                              <Input
-                                type="number"
-                                placeholder="0.00"
-                                {...field}
-                                onChange={(e) =>
-                                  field.onChange(parseFloat(e.target.value))
-                                }
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="w-[30%] flex items-center justify-between gap-12">
-                        <button
-                          type="button"
-                          disabled={index === 0}
-                          onClick={() => {
-                            const invoices = form.getValues("invoices");
-                            form.setValue(
-                              "invoices",
-                              invoices.filter((_, i) => i !== index)
-                            );
-                          }}
-                          className="ml-[-8px] flex-shrink-0 hover:opacity-70 transition-opacity"
-                        >
-                          <TrashIcon
-                            className={`h-5 w-5 ${
-                              index === 0 ? "text-gray-300" : "text-black"
-                            }`}
-                          />
-                        </button>
-                        <FormField
-                          control={form.control}
-                          name={`invoices.${index}.files`}
-                          render={({ field }) => (
-                            <FormItem className="flex-1">
-                              <InvoiceFileUpload
-                                files={field.value || []}
-                                onFilesChange={(files) =>
-                                  form.setValue(
-                                    `invoices.${index}.files`,
-                                    files
-                                  )
-                                }
-                                disabled={isSubmitting}
-                                index={index}
-                              />
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    const invoices = form.getValues("invoices");
-                    form.setValue("invoices", [
-                      ...invoices,
-                      { number: "", amount: 0, files: [] },
-                    ]);
-                  }}
-                  className="w-full text-center pt-2 text-sm text-muted-foreground hover:text-black transition-colors flex items-center justify-center gap-2"
-                >
-                  <PlusIcon className="h-4 w-4" />
-                  Add Another Invoice
-                </button>
-              </div>
-
-              {selectedVendor && vendorDetails && !isNewVendor && (
-                <>
-                  {vendorDetails.business_details.customFields?.map((field) => (
-                    <FormField
-                      key={field.key}
-                      control={form.control}
-                      name={field.key}
-                      render={({ field: formField }) => (
-                        <FormItem>
-                          <FormLabel>{field.name}</FormLabel>
-                          <FormControl>
-                            <Input
-                              type={field.type === "number" ? "number" : "text"}
-                              placeholder={`Enter ${field.name.toLowerCase()}`}
-                              required={field.required}
-                              {...formField}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  ))}
-                </>
-              )}
-
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Additional Notes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Enter additional notes"
-                        className="min-h-[60px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex flex-row gap-6 w-[100%]">
-                <div className="flex flex-1 items-stretch w-[100%]">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-6">
+            <Form {...form}>
+              <form
+                id="payment-request-form"
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-6 pb-24"
+              >
+                <div className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="due_date"
+                    name="vendor"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Due Date</FormLabel>
-                        <Popover>
+                        <FormLabel>Vendor/Biller</FormLabel>
+                        <Popover open={open} onOpenChange={setOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
                                 variant="outline"
-                                className="w-full justify-start text-left font-normal"
+                                role="combobox"
+                                className={`w-full justify-between ${
+                                  !field.value && "text-muted-foreground"
+                                }`}
                               >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value.toDateString()}
+                                {field.value === "new"
+                                  ? "+ SEND TO A NEW VENDOR"
+                                  : field.value
+                                  ? availableVendors.find(
+                                      (vendor) => vendor.id === field.value
+                                    )?.name
+                                  : "Select vendor"}
+                                <CaretSortIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0">
-                            <Calendar
-                              mode="single"
-                              selected={field.value}
-                              onSelect={field.onChange}
-                              initialFocus
-                            />
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                            <Command>
+                              <CommandInput
+                                placeholder="Search vendors..."
+                                className="h-9"
+                                value={query}
+                                onValueChange={setQuery}
+                              />
+                              <CommandList>
+                                <CommandEmpty>No vendors found.</CommandEmpty>
+                                <CommandGroup>
+                                  {vendorsLoading ? (
+                                    <div className="p-4">
+                                      <Skeleton className="h-5 w-full" />
+                                    </div>
+                                  ) : (
+                                    filteredVendors.map((vendor) => (
+                                      <CommandItem
+                                        key={vendor.id}
+                                        value={vendor.id}
+                                        onSelect={() =>
+                                          handleVendorSelection(vendor.id)
+                                        }
+                                      >
+                                        {vendor.name}
+                                        <CheckIcon
+                                          className={`ml-auto h-4 w-4 ${
+                                            vendor.id === field.value
+                                              ? "opacity-100"
+                                              : "opacity-0"
+                                          }`}
+                                        />
+                                      </CommandItem>
+                                    ))
+                                  )}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
                           </PopoverContent>
                         </Popover>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <div className="space-y-2 flex flex-col flex-1 justify-end w-[100%] items-stretch">
-                  <FormItem>
-                    <FormLabel>Total Amount (USDC)</FormLabel>
-                    <Input
-                      type="number"
-                      value={totalAmount.toFixed(2)}
-                      disabled
-                      className="text-muted-foreground bg-muted cursor-not-allowed"
-                    />
-                  </FormItem>
-                </div>
-              </div>
+                  {selectedVendor && (
+                    <Card className="bg-muted/50">
+                      <CardContent className="p-4">
+                        {isNewVendor ? (
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={form.control}
+                              name="recipient.name"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input
+                                      placeholder="Enter vendor name"
+                                      {...field}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="recipient.email"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input
+                                      type="email"
+                                      placeholder="Enter vendor email"
+                                      {...field}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        ) : vendorDetailsLoading ? (
+                          <div className="space-y-1 p-0 m-0">
+                            <Skeleton className="h-[14px] w-[250px]" />
+                            <Skeleton className="h-[12px] w-[200px]" />
+                            <Skeleton className="h-[12px] w-[150px]" />
+                          </div>
+                        ) : vendorDetails ? (
+                          <div className="p-0 m-0">
+                            <h4 className="font-semibold text-sm">
+                              {vendorDetails.business_details.companyName}
+                            </h4>
+                            <p className="text-xs text-muted-foreground">
+                              {vendorDetails.business_details.companyAddress}
+                            </p>
+                            <div className="flex w-full">
+                              <p className="text-xs text-muted-foreground">
+                                {vendorDetails.business_details.companyPhone}
+                              </p>
+                              <p className="text-xs text-muted-foreground ml-4">
+                                {vendorDetails.business_details.companyEmail}
+                              </p>
+                            </div>
+                          </div>
+                        ) : null}
+                      </CardContent>
+                    </Card>
+                  )}
 
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create"}
-              </Button>
-            </div>
-          </form>
-        </Form>
+                  <div className="space-y-4">
+                    <div className="flex gap-6">
+                      <div className="w-[40%]">
+                        <FormLabel>Invoice</FormLabel>
+                      </div>
+                      <div className="w-[30%]">
+                        <FormLabel className="text-sm text-muted-foreground">
+                          Amount (USDC)
+                        </FormLabel>
+                      </div>
+                      <div className="w-[30%]" />
+                    </div>
+
+                    {form.watch("invoices").map((_, index) => (
+                      <div key={index} className="space-y-2">
+                        <div className="flex gap-6 w-full items-start">
+                          <FormField
+                            control={form.control}
+                            name={`invoices.${index}.number`}
+                            render={({ field }) => (
+                              <FormItem className="w-[40%]">
+                                <FormControl>
+                                  <Input
+                                    placeholder="Enter invoice #"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name={`invoices.${index}.amount`}
+                            render={({ field }) => (
+                              <FormItem className="w-[30%]">
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    placeholder="0.00"
+                                    {...field}
+                                    onChange={(e) =>
+                                      field.onChange(parseFloat(e.target.value))
+                                    }
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="w-[30%] flex items-center gap-4">
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() => {
+                                const invoices = form.getValues("invoices");
+                                form.setValue(
+                                  "invoices",
+                                  invoices.filter((_, i) => i !== index)
+                                );
+                              }}
+                              className="flex-shrink-0 hover:opacity-70 transition-opacity"
+                            >
+                              <TrashIcon
+                                className={`h-5 w-5 ${
+                                  index === 0 ? "text-gray-300" : "text-black"
+                                }`}
+                              />
+                            </button>
+                            <FormField
+                              control={form.control}
+                              name={`invoices.${index}.files`}
+                              render={({ field }) => (
+                                <FormItem className="flex-1">
+                                  <InvoiceFileUpload
+                                    files={field.value || []}
+                                    onFilesChange={(files) =>
+                                      form.setValue(
+                                        `invoices.${index}.files`,
+                                        files
+                                      )
+                                    }
+                                    disabled={isSubmitting}
+                                    index={index}
+                                  />
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const invoices = form.getValues("invoices");
+                        form.setValue("invoices", [
+                          ...invoices,
+                          { number: "", amount: 0, files: [] },
+                        ]);
+                      }}
+                      className="w-full text-center pt-2 text-sm text-muted-foreground hover:text-black transition-colors flex items-center justify-center gap-2"
+                    >
+                      <PlusIcon className="h-4 w-4" />
+                      Add Another Invoice
+                    </button>
+                  </div>
+
+                  {selectedVendor && vendorDetails && !isNewVendor && (
+                    <>
+                      {vendorDetails.business_details.customFields?.map(
+                        (field) => (
+                          <FormField
+                            key={field.key}
+                            control={form.control}
+                            name={field.key}
+                            render={({ field: formField }) => (
+                              <FormItem>
+                                <FormLabel>{field.name}</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type={
+                                      field.type === "number"
+                                        ? "number"
+                                        : "text"
+                                    }
+                                    placeholder={`Enter ${field.name.toLowerCase()}`}
+                                    required={field.required}
+                                    {...formField}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )
+                      )}
+                    </>
+                  )}
+
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Additional Notes</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Enter additional notes"
+                            className="min-h-[60px]"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex gap-6">
+                    <div className="flex-1">
+                      <FormField
+                        control={form.control}
+                        name="due_date"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Due Date</FormLabel>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <FormControl>
+                                  <Button
+                                    variant="outline"
+                                    className="w-full justify-start text-left font-normal"
+                                  >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {field.value.toDateString()}
+                                  </Button>
+                                </FormControl>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                  mode="single"
+                                  selected={field.value}
+                                  onSelect={field.onChange}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="flex-1">
+                      <FormItem>
+                        <FormLabel>Total Amount (USDC)</FormLabel>
+                        <Input
+                          type="number"
+                          value={totalAmount.toFixed(2)}
+                          disabled
+                          className="text-muted-foreground bg-muted cursor-not-allowed"
+                        />
+                      </FormItem>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            </Form>
+          </div>
+        </div>
+
+        <div className="bg-background p-6 absolute bottom-0 left-0 right-0">
+          <Button
+            type="submit"
+            form="payment-request-form"
+            className="w-full"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Creating..." : "Create"}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -171,7 +171,7 @@ export function createPaymentRequestEmailHtml({
                 .map(
                   (invoice) =>
                     `<div class="invoice-row">
-                      <div class="invoice-number">Invoice #${
+                      <div class="invoice-number">Invoice ${
                         invoice.number
                       }</div>
                       <div class="invoice-amount">${formatCurrency(
