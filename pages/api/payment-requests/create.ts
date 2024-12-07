@@ -82,6 +82,7 @@ async function handler(
     const input = PaymentRequestSchema.parse(req.body);
     let recipientOrgId: string;
     let recipientEmail: string;
+    let currentRecipientOrg: any;
 
     // Handle organization
     if (!input.organization.id) {
@@ -123,6 +124,7 @@ async function handler(
 
       recipientOrgId = existingOrg.id;
       recipientEmail = existingOrg.business_details.companyEmail;
+      currentRecipientOrg = existingOrg;
     }
 
     // Create transaction record
@@ -149,6 +151,10 @@ async function handler(
           payment_request: {
             notes: input.notes,
             creator_email: input.creator_email,
+            organization_name:
+              input.organization.name ||
+              currentRecipientOrg.business_details.companyName ||
+              "Organization name not provided",
           },
         },
         created_by: user.id,

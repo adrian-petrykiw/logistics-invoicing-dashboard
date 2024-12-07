@@ -129,8 +129,8 @@ export default function TransactionsPage() {
                   </TableCell>
                   <TableCell className="capitalize text-xs">
                     {tx.sender.multisig_address == publicKey?.toString()
-                      ? "Outbound"
-                      : "Inbound"}
+                      ? "Inbound"
+                      : "Outbound"}
                   </TableCell>
                   <TableCell className="font-mono text-xs">
                     <a

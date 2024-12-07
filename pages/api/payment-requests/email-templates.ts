@@ -8,11 +8,8 @@ interface PaymentRequestEmailProps {
       payment_request?: {
         creator_email?: string;
         notes?: string;
+        organization_name?: string;
       };
-    };
-    organization_id?: string;
-    organization?: {
-      name?: string;
     };
     invoices: Array<{
       number: string;
@@ -88,20 +85,25 @@ export function createPaymentRequestEmailHtml({
             color: #6b7280;
             margin-bottom: 24px;
           }
-          .details {
-            margin-bottom: 16px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
+          .section {
+            margin-bottom: 20px;
           }
-          .details:last-child {
-            margin-bottom: 0;
-          }
-          .details-title {
+          .section-title {
             font-weight: 600;
+            margin-bottom: 12px;
+            color: #374151;
+          }
+          .invoice-row {
+            display: table;
+            width: 100%;
             margin-bottom: 8px;
           }
+          .invoice-number {
+            display: table-cell;
+            text-align: left;
+          }
           .invoice-amount {
+            display: table-cell;
             text-align: right;
           }
           .button {
@@ -149,32 +151,33 @@ export function createPaymentRequestEmailHtml({
               paymentRequest.due_date
             )}</div>
             
-            <div class="details">
-              <div class="details-title">${
+            <div class="section">
+              <div class="section-title">${
                 type === "requester" ? "Recipient" : "Requester"
               }:</div>
-              <div>
-                <strong>${
-                  paymentRequest.organization?.name || "N/A"
-                }</strong><br>
-                ${
-                  paymentRequest.metadata?.payment_request?.creator_email ||
-                  "No email provided"
-                }
-              </div>
+              <div>${
+                paymentRequest.metadata?.payment_request?.organization_name ||
+                "Organization name not provided"
+              }</div>
+              <div>${
+                paymentRequest.metadata?.payment_request?.creator_email ||
+                "No email provided"
+              }</div>
             </div>
 
-            <div class="details">
-              <div class="details-title">Invoices:</div>
+            <div class="section">
+              <div class="section-title">Invoices:</div>
               ${paymentRequest.invoices
                 .map(
                   (invoice) =>
-                    `<div class="details">
-                  <div>Invoice #${invoice.number}</div>
-                  <div class="invoice-amount">${formatCurrency(
-                    invoice.amount
-                  )}</div>
-                </div>`
+                    `<div class="invoice-row">
+                      <div class="invoice-number">Invoice #${
+                        invoice.number
+                      }</div>
+                      <div class="invoice-amount">${formatCurrency(
+                        invoice.amount
+                      )}</div>
+                    </div>`
                 )
                 .join("")}
             </div>
@@ -182,8 +185,8 @@ export function createPaymentRequestEmailHtml({
             ${
               paymentRequest.metadata?.payment_request?.notes
                 ? `
-              <div class="details">
-                <div class="details-title">Notes:</div>
+              <div class="section">
+                <div class="section-title">Notes:</div>
                 <div>${paymentRequest.metadata.payment_request.notes}</div>
               </div>
             `
@@ -192,9 +195,9 @@ export function createPaymentRequestEmailHtml({
 
             ${
               type === "recipient"
-                ? `<a href="/payment-requests/${paymentRequest.id}" class="button">
-                MAKE PAYMENT
-              </a>`
+                ? `<a href="https://cargobill.co/payment-requests/${paymentRequest.id}" class="button">
+                    MAKE PAYMENT
+                  </a>`
                 : ""
             }
           </div>
