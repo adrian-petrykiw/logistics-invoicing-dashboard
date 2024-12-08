@@ -60,7 +60,7 @@ export function createPaymentRequestEmailHtml({
             margin-bottom: 32px;
           }
           .logo img {
-            height: 32px;
+            height: 64px;
             width: auto;
           }
           h1 {
@@ -68,6 +68,13 @@ export function createPaymentRequestEmailHtml({
             font-weight: 600;
             color: #1f2937;
             margin-bottom: 24px;
+            text-align: center;
+          }
+          h2 {
+            font-size: 21px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 16px;
             text-align: center;
           }
           .info-box {
@@ -143,7 +150,7 @@ export function createPaymentRequestEmailHtml({
             <img src="https://cargobill.co/logo-horizontal.png" alt="Company Logo">           
           </div>
           
-          <h1>You have a new payment request</h1>
+          <h2>You have a new payment request!</h2>
           
           <div class="info-box">
             <div class="amount">${formatCurrency(paymentRequest.amount)}</div>
