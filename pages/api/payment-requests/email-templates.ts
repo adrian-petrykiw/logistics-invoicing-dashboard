@@ -140,7 +140,7 @@ export function createPaymentRequestEmailHtml({
       <body>
         <div class="container">
           <div class="logo">
-            <img src="https://cargobill.co/logo-horizontal.svg" alt="Company Logo">           
+            <img src="https://cargobill.co/logo-horizontal.png" alt="Company Logo">           
           </div>
           
           <h1>You have a new payment request</h1>
