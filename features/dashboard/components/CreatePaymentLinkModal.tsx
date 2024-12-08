@@ -108,6 +108,42 @@ export function CreatePaymentLinkModal({
     ),
   ];
 
+  const isFormValid = () => {
+    const values = form.getValues();
+
+    // Check if vendor is selected
+    if (!values.vendor) return false;
+
+    // Check if at least one invoice is valid
+    const hasValidInvoice = values.invoices.some(
+      (invoice) => invoice.number.trim() !== "" && invoice.amount > 0
+    );
+    if (!hasValidInvoice) return false;
+
+    // If it's a new vendor, check recipient details
+    if (isNewVendor) {
+      if (!values.recipient.name.trim() || !values.recipient.email.trim()) {
+        return false;
+      }
+    }
+
+    // Check required custom fields for existing vendors
+    if (!isNewVendor && vendorDetails?.business_details.customFields) {
+      const requiredFields = vendorDetails.business_details.customFields.filter(
+        (field) => field.required
+      );
+
+      const hasAllRequiredFields = requiredFields.every(
+        (field) =>
+          values[field.key] && values[field.key].toString().trim() !== ""
+      );
+
+      if (!hasAllRequiredFields) return false;
+    }
+
+    return true;
+  };
+
   const form = useForm<FormValues>({
     defaultValues: {
       vendor: "",
@@ -127,6 +163,7 @@ export function CreatePaymentLinkModal({
         {}
       ) || {}),
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   const totalAmount = form
@@ -332,6 +369,9 @@ export function CreatePaymentLinkModal({
                   <FormField
                     control={form.control}
                     name="vendor"
+                    rules={{
+                      required: "Please select a vendor",
+                    }}
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Vendor/Biller</FormLabel>
@@ -402,277 +442,328 @@ export function CreatePaymentLinkModal({
                   />
 
                   {selectedVendor && (
-                    <Card className="bg-muted/50">
-                      <CardContent className="p-4">
-                        {isNewVendor ? (
-                          <div className="grid grid-cols-2 gap-4">
-                            <FormField
-                              control={form.control}
-                              name="recipient.name"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      placeholder="Enter vendor name"
-                                      {...field}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="recipient.email"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      type="email"
-                                      placeholder="Enter vendor email"
-                                      {...field}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                        ) : vendorDetailsLoading ? (
-                          <div className="space-y-1 p-0 m-0">
-                            <Skeleton className="h-[14px] w-[250px]" />
-                            <Skeleton className="h-[12px] w-[200px]" />
-                            <Skeleton className="h-[12px] w-[150px]" />
-                          </div>
-                        ) : vendorDetails ? (
-                          <div className="p-0 m-0">
-                            <h4 className="font-semibold text-sm">
-                              {vendorDetails.business_details.companyName}
-                            </h4>
-                            <p className="text-xs text-muted-foreground">
-                              {vendorDetails.business_details.companyAddress}
-                            </p>
-                            <div className="flex w-full">
+                    <>
+                      {/* Vendor Details Card */}
+                      <Card className="bg-muted/50">
+                        <CardContent className="p-4">
+                          {isNewVendor ? (
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="recipient.name"
+                                rules={{
+                                  required: "Vendor name is required",
+                                }}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input
+                                        placeholder="Enter vendor name"
+                                        {...field}
+                                        onChange={(e) => {
+                                          field.onChange(e);
+                                          form.trigger();
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="recipient.email"
+                                rules={{
+                                  required: "Vendor email is required",
+                                  pattern: {
+                                    value:
+                                      /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                                    message: "Invalid email address",
+                                  },
+                                }}
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input
+                                        type="email"
+                                        placeholder="Enter vendor email"
+                                        {...field}
+                                        onChange={(e) => {
+                                          field.onChange(e);
+                                          form.trigger();
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          ) : vendorDetailsLoading ? (
+                            <div className="space-y-1 p-0 m-0">
+                              <Skeleton className="h-[14px] w-[250px]" />
+                              <Skeleton className="h-[12px] w-[200px]" />
+                              <Skeleton className="h-[12px] w-[150px]" />
+                            </div>
+                          ) : vendorDetails ? (
+                            <div className="p-0 m-0">
+                              <h4 className="font-semibold text-sm">
+                                {vendorDetails.business_details.companyName}
+                              </h4>
                               <p className="text-xs text-muted-foreground">
-                                {vendorDetails.business_details.companyPhone}
+                                {vendorDetails.business_details.companyAddress}
                               </p>
-                              <p className="text-xs text-muted-foreground ml-4">
-                                {vendorDetails.business_details.companyEmail}
-                              </p>
+                              <div className="flex w-full">
+                                <p className="text-xs text-muted-foreground">
+                                  {vendorDetails.business_details.companyPhone}
+                                </p>
+                                <p className="text-xs text-muted-foreground ml-4">
+                                  {vendorDetails.business_details.companyEmail}
+                                </p>
+                              </div>
+                            </div>
+                          ) : null}
+                        </CardContent>
+                      </Card>
+
+                      {/* Invoice Section */}
+                      <div className="space-y-4">
+                        <div className="flex gap-6">
+                          <div className="w-[40%]">
+                            <FormLabel>Invoice</FormLabel>
+                          </div>
+                          <div className="w-[30%]">
+                            <FormLabel className="text-sm text-muted-foreground">
+                              Amount (USDC)
+                            </FormLabel>
+                          </div>
+                          <div className="w-[30%]" />
+                        </div>
+
+                        {form.watch("invoices").map((_, index) => (
+                          <div key={index} className="space-y-2">
+                            <div className="flex gap-6 w-full items-start">
+                              <FormField
+                                control={form.control}
+                                name={`invoices.${index}.number`}
+                                rules={{
+                                  required: "Invoice number is required",
+                                }}
+                                render={({ field }) => (
+                                  <FormItem className="w-[40%]">
+                                    <FormControl>
+                                      <Input
+                                        placeholder="Enter invoice #"
+                                        {...field}
+                                        onChange={(e) => {
+                                          field.onChange(e);
+                                          form.trigger();
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name={`invoices.${index}.amount`}
+                                rules={{
+                                  required: "Amount is required",
+                                  min: {
+                                    value: 0.01,
+                                    message: "Amount must be greater than 0",
+                                  },
+                                }}
+                                render={({ field }) => (
+                                  <FormItem className="w-[30%]">
+                                    <FormControl>
+                                      <Input
+                                        type="number"
+                                        placeholder="0.00"
+                                        {...field}
+                                        onChange={(e) => {
+                                          field.onChange(
+                                            parseFloat(e.target.value)
+                                          );
+                                          form.trigger();
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <div className="w-[30%] flex items-center gap-4">
+                                <button
+                                  type="button"
+                                  disabled={index === 0}
+                                  onClick={() => {
+                                    const invoices = form.getValues("invoices");
+                                    form.setValue(
+                                      "invoices",
+                                      invoices.filter((_, i) => i !== index)
+                                    );
+                                    form.trigger();
+                                  }}
+                                  className="flex-shrink-0 hover:opacity-70 transition-opacity"
+                                >
+                                  <TrashIcon
+                                    className={`h-5 w-5 ${
+                                      index === 0
+                                        ? "text-gray-300"
+                                        : "text-black"
+                                    }`}
+                                  />
+                                </button>
+                                <FormField
+                                  control={form.control}
+                                  name={`invoices.${index}.files`}
+                                  render={({ field }) => (
+                                    <FormItem className="flex-1">
+                                      <InvoiceFileUpload
+                                        files={field.value || []}
+                                        onFilesChange={(files) =>
+                                          form.setValue(
+                                            `invoices.${index}.files`,
+                                            files
+                                          )
+                                        }
+                                        disabled={isSubmitting}
+                                        index={index}
+                                      />
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
                             </div>
                           </div>
-                        ) : null}
-                      </CardContent>
-                    </Card>
-                  )}
+                        ))}
 
-                  <div className="space-y-4">
-                    <div className="flex gap-6">
-                      <div className="w-[40%]">
-                        <FormLabel>Invoice</FormLabel>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const invoices = form.getValues("invoices");
+                            form.setValue("invoices", [
+                              ...invoices,
+                              { number: "", amount: 0, files: [] },
+                            ]);
+                          }}
+                          className="w-full text-center pt-2 text-sm text-muted-foreground hover:text-black transition-colors flex items-center justify-center gap-2"
+                        >
+                          <PlusIcon className="h-4 w-4" />
+                          Add Another Invoice
+                        </button>
                       </div>
-                      <div className="w-[30%]">
-                        <FormLabel className="text-sm text-muted-foreground">
-                          Amount (USDC)
-                        </FormLabel>
-                      </div>
-                      <div className="w-[30%]" />
-                    </div>
 
-                    {form.watch("invoices").map((_, index) => (
-                      <div key={index} className="space-y-2">
-                        <div className="flex gap-6 w-full items-start">
-                          <FormField
-                            control={form.control}
-                            name={`invoices.${index}.number`}
-                            render={({ field }) => (
-                              <FormItem className="w-[40%]">
-                                <FormControl>
-                                  <Input
-                                    placeholder="Enter invoice #"
-                                    {...field}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name={`invoices.${index}.amount`}
-                            render={({ field }) => (
-                              <FormItem className="w-[30%]">
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    placeholder="0.00"
-                                    {...field}
-                                    onChange={(e) =>
-                                      field.onChange(parseFloat(e.target.value))
-                                    }
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <div className="w-[30%] flex items-center gap-4">
-                            <button
-                              type="button"
-                              disabled={index === 0}
-                              onClick={() => {
-                                const invoices = form.getValues("invoices");
-                                form.setValue(
-                                  "invoices",
-                                  invoices.filter((_, i) => i !== index)
-                                );
-                              }}
-                              className="flex-shrink-0 hover:opacity-70 transition-opacity"
-                            >
-                              <TrashIcon
-                                className={`h-5 w-5 ${
-                                  index === 0 ? "text-gray-300" : "text-black"
-                                }`}
+                      {/* Custom Fields */}
+                      {vendorDetails && !isNewVendor && (
+                        <>
+                          {vendorDetails.business_details.customFields?.map(
+                            (field) => (
+                              <FormField
+                                key={field.key}
+                                control={form.control}
+                                name={field.key}
+                                rules={{
+                                  required: field.required
+                                    ? `${field.name} is required`
+                                    : false,
+                                }}
+                                render={({ field: formField }) => (
+                                  <FormItem>
+                                    <FormLabel>{field.name}</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type={
+                                          field.type === "number"
+                                            ? "number"
+                                            : "text"
+                                        }
+                                        placeholder={`Enter ${field.name.toLowerCase()}`}
+                                        required={field.required}
+                                        {...formField}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
                               />
-                            </button>
-                            <FormField
-                              control={form.control}
-                              name={`invoices.${index}.files`}
-                              render={({ field }) => (
-                                <FormItem className="flex-1">
-                                  <InvoiceFileUpload
-                                    files={field.value || []}
-                                    onFilesChange={(files) =>
-                                      form.setValue(
-                                        `invoices.${index}.files`,
-                                        files
-                                      )
-                                    }
-                                    disabled={isSubmitting}
-                                    index={index}
-                                  />
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const invoices = form.getValues("invoices");
-                        form.setValue("invoices", [
-                          ...invoices,
-                          { number: "", amount: 0, files: [] },
-                        ]);
-                      }}
-                      className="w-full text-center pt-2 text-sm text-muted-foreground hover:text-black transition-colors flex items-center justify-center gap-2"
-                    >
-                      <PlusIcon className="h-4 w-4" />
-                      Add Another Invoice
-                    </button>
-                  </div>
-
-                  {selectedVendor && vendorDetails && !isNewVendor && (
-                    <>
-                      {vendorDetails.business_details.customFields?.map(
-                        (field) => (
-                          <FormField
-                            key={field.key}
-                            control={form.control}
-                            name={field.key}
-                            render={({ field: formField }) => (
-                              <FormItem>
-                                <FormLabel>{field.name}</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type={
-                                      field.type === "number"
-                                        ? "number"
-                                        : "text"
-                                    }
-                                    placeholder={`Enter ${field.name.toLowerCase()}`}
-                                    required={field.required}
-                                    {...formField}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        )
+                            )
+                          )}
+                        </>
                       )}
-                    </>
-                  )}
 
-                  <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Additional Notes</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Enter additional notes"
-                            className="min-h-[60px]"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="flex gap-6">
-                    <div className="flex-1">
+                      {/* Notes Field */}
                       <FormField
                         control={form.control}
-                        name="due_date"
+                        name="notes"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Due Date</FormLabel>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <FormControl>
-                                  <Button
-                                    variant="outline"
-                                    className="w-full justify-start text-left font-normal"
-                                  >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {field.value.toDateString()}
-                                  </Button>
-                                </FormControl>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0">
-                                <Calendar
-                                  mode="single"
-                                  selected={field.value}
-                                  onSelect={field.onChange}
-                                  initialFocus
-                                />
-                              </PopoverContent>
-                            </Popover>
+                            <FormLabel>Additional Notes</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="Enter additional notes"
+                                className="min-h-[60px]"
+                                {...field}
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                    </div>
 
-                    <div className="flex-1">
-                      <FormItem>
-                        <FormLabel>Total Amount (USDC)</FormLabel>
-                        <Input
-                          type="number"
-                          value={totalAmount.toFixed(2)}
-                          disabled
-                          className="text-muted-foreground bg-muted cursor-not-allowed"
-                        />
-                      </FormItem>
-                    </div>
-                  </div>
+                      {/* Due Date and Total Amount */}
+                      <div className="flex gap-6">
+                        <div className="flex-1">
+                          <FormField
+                            control={form.control}
+                            name="due_date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Due Date</FormLabel>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <FormControl>
+                                      <Button
+                                        variant="outline"
+                                        className="w-full justify-start text-left font-normal"
+                                      >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {field.value.toDateString()}
+                                      </Button>
+                                    </FormControl>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                      mode="single"
+                                      selected={field.value}
+                                      onSelect={field.onChange}
+                                      initialFocus
+                                    />
+                                  </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="flex-1">
+                          <FormItem>
+                            <FormLabel>Total Amount (USDC)</FormLabel>
+                            <Input
+                              type="number"
+                              value={totalAmount.toFixed(2)}
+                              disabled
+                              className="text-muted-foreground bg-muted cursor-not-allowed"
+                            />
+                          </FormItem>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </form>
             </Form>
@@ -684,7 +775,7 @@ export function CreatePaymentLinkModal({
             type="submit"
             form="payment-request-form"
             className="w-full"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !isFormValid()}
           >
             {isSubmitting ? "Creating..." : "Create"}
           </Button>
