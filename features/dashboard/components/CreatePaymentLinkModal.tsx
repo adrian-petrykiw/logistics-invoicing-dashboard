@@ -163,7 +163,6 @@ export function CreatePaymentLinkModal({
         {}
       ) || {}),
     },
-    mode: "onChange", // Enable real-time validation
   });
 
   const totalAmount = form
@@ -569,10 +568,19 @@ export function CreatePaymentLinkModal({
                                 control={form.control}
                                 name={`invoices.${index}.amount`}
                                 rules={{
-                                  required: "Amount is required",
-                                  min: {
-                                    value: 0.01,
-                                    message: "Amount must be greater than 0",
+                                  validate: (value) => {
+                                    if (
+                                      form.formState.touchedFields[
+                                        `invoices.${index}.amount`
+                                      ] ||
+                                      form.formState.isSubmitted
+                                    ) {
+                                      return (
+                                        value > 0 ||
+                                        "Amount must be greater than 0"
+                                      );
+                                    }
+                                    return true;
                                   },
                                 }}
                                 render={({ field }) => (
@@ -586,7 +594,6 @@ export function CreatePaymentLinkModal({
                                           field.onChange(
                                             parseFloat(e.target.value)
                                           );
-                                          form.trigger();
                                         }}
                                       />
                                     </FormControl>
