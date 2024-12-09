@@ -1,4 +1,3 @@
-// pages/transactions.tsx
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -19,11 +18,13 @@ import { useAuthContext } from "@/components/providers/AuthProvider";
 import { cn } from "@/utils/styling";
 import { formatDate } from "@/utils/format";
 import { USDC_MINT } from "@/utils/constants";
+import { useOrganization } from "@/features/auth/hooks/useOrganization";
 
 export default function TransactionsPage() {
   const router = useRouter();
   const { connected, publicKey } = useWallet();
   const { user, isAuthenticated, isLoading: authLoading } = useAuthContext();
+  const { organization } = useOrganization(user?.walletAddress || "");
   const { transactions, isLoading, error, refetch, isRefetching } =
     useTransactions();
 
@@ -128,7 +129,8 @@ export default function TransactionsPage() {
                     </a>
                   </TableCell>
                   <TableCell className="capitalize text-xs">
-                    {tx.sender.multisig_address == publicKey?.toString()
+                    {tx.recipient.multisig_address ===
+                    organization?.multisig_wallet
                       ? "Inbound"
                       : "Outbound"}
                   </TableCell>
@@ -142,7 +144,7 @@ export default function TransactionsPage() {
                       {tx.sender.multisig_address.slice(0, 8)}...
                       {tx.sender.multisig_address.slice(-8)}
                     </a>
-                  </TableCell>{" "}
+                  </TableCell>
                   <TableCell className="font-mono text-xs">
                     <a
                       href={`https://solscan.io/tx/${tx.signature}`}

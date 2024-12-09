@@ -1,7 +1,5 @@
-// pages/api/transactions/index.ts
 import { NextApiResponse } from "next";
 import { withAuth, AuthedRequest } from "@/pages/api/_lib/auth";
-
 import { z } from "zod";
 import { ApiResponse, TransactionRecord } from "@/types/cargobill";
 import { supabaseAdmin } from "../_lib/supabase";
@@ -84,25 +82,47 @@ async function handleGetTransactions(
   try {
     const { organization_id } = req.query;
 
-    const query = supabaseAdmin
-      .from("transactions")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (organization_id) {
-      query.eq("organization_id", organization_id);
+    if (!organization_id) {
+      throw new Error("Organization ID is required");
     }
 
-    const { data: transactions, error } = await query;
+    const { data: organization, error: orgError } = await supabaseAdmin
+      .from("organizations")
+      .select("multisig_wallet")
+      .eq("id", organization_id)
+      .single();
 
-    if (error) throw error;
+    if (orgError || !organization) {
+      console.error("Organization fetch error:", orgError);
+      throw new Error("Failed to fetch organization details");
+    }
+
+    console.log(
+      "Found organization with multisig wallet:",
+      organization.multisig_wallet
+    );
+
+    const { data: transactions, error: txError } = await supabaseAdmin
+      .from("transactions")
+      .select("*")
+      .or(
+        `sender->>multisig_address.eq."${organization.multisig_wallet}",recipient->>multisig_address.eq."${organization.multisig_wallet}"`
+      )
+      .order("created_at", { ascending: false });
+
+    if (txError) {
+      console.error("Transaction fetch error:", txError);
+      throw txError;
+    }
+
+    console.log("Found transactions:", transactions?.length || 0);
 
     return res.status(200).json({
       success: true,
       data: transactions as TransactionRecord[],
     });
   } catch (error) {
-    console.error("Error fetching transactions:", error);
+    console.error("Error in handleGetTransactions:", error);
     return res.status(500).json({
       success: false,
       error: {
