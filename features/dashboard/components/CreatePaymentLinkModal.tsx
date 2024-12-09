@@ -265,7 +265,24 @@ export function CreatePaymentLinkModal({
         sender: vendorInfo
           ? {
               multisig_address: vendorInfo.multisigAddress,
-              vault_address: vendorInfo.vaultAddress,
+              vault_address:
+                vendorInfo.multisigAddress !== "pending"
+                  ? (() => {
+                      try {
+                        const multisigPda = new PublicKey(
+                          vendorInfo.multisigAddress
+                        );
+                        const [vaultPda] = getVaultPda({
+                          multisigPda,
+                          index: 0,
+                        });
+                        return vaultPda.toBase58();
+                      } catch (error) {
+                        console.error("Failed to derive vault address:", error);
+                        return "pending";
+                      }
+                    })()
+                  : "pending",
               wallet_address: "pending",
             }
           : {

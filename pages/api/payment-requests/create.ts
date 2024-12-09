@@ -1,4 +1,3 @@
-// pages/api/payment-requests/create.ts
 import { NextApiResponse } from "next";
 import { withAuth, AuthedRequest } from "@/pages/api/_lib/auth";
 import { ApiResponse, TransactionRecord } from "@/types/transaction";
@@ -6,6 +5,8 @@ import { supabaseAdmin } from "../_lib/supabase";
 import { emailService } from "./email-service";
 import { createPaymentRequestEmailHtml } from "./email-templates";
 import { z } from "zod";
+import { getVaultPda } from "@sqds/multisig";
+import { PublicKey } from "@solana/web3.js";
 
 const PaymentRequestSchema = z.object({
   organization: z
@@ -34,8 +35,8 @@ const PaymentRequestSchema = z.object({
   sender: z
     .object({
       wallet_address: z.string().optional(),
-      multisig_address: z.string().optional(), // Optional for new vendors
-      vault_address: z.string().optional(), // Optional for new vendors
+      multisig_address: z.string().optional(),
+      vault_address: z.string().optional(),
     })
     .optional(),
   recipient: z.object({
@@ -108,11 +109,12 @@ async function handler(
       if (newOrgError) throw newOrgError;
       recipientOrgId = newOrg.id;
       recipientEmail = input.organization.email!;
+      currentRecipientOrg = newOrg;
     } else {
       // Fetch existing organization's details
       const { data: existingOrg, error: orgError } = await supabaseAdmin
         .from("organizations")
-        .select("id, business_details")
+        .select("id, business_details, multisig_wallet")
         .eq("id", input.organization.id)
         .single();
 
@@ -126,6 +128,24 @@ async function handler(
       recipientOrgId = existingOrg.id;
       recipientEmail = existingOrg.business_details.companyEmail;
       currentRecipientOrg = existingOrg;
+    }
+
+    // Derive vault address for existing organizations with valid multisig
+    let senderVaultAddress = "pending";
+    if (
+      currentRecipientOrg?.multisig_wallet &&
+      currentRecipientOrg.multisig_wallet !== "pending"
+    ) {
+      try {
+        const multisigPda = new PublicKey(currentRecipientOrg.multisig_wallet);
+        const [vaultPda] = getVaultPda({
+          multisigPda,
+          index: 0,
+        });
+        senderVaultAddress = vaultPda.toBase58();
+      } catch (error) {
+        console.error("Failed to derive vault address:", error);
+      }
     }
 
     // Create transaction record with correct sender/recipient
@@ -143,10 +163,10 @@ async function handler(
         sender: {
           wallet_address: "pending",
           multisig_address: currentRecipientOrg?.multisig_wallet || "pending",
-          vault_address: "pending",
+          vault_address: senderVaultAddress,
         },
         recipient: {
-          wallet_address: req.user.walletAddress, // Add the creator's wallet address
+          wallet_address: req.user.walletAddress,
           multisig_address: input.recipient.multisig_address,
           vault_address: input.recipient.vault_address,
         },
@@ -157,7 +177,7 @@ async function handler(
           payment_request: {
             notes: input.notes,
             creator_email: input.creator_email,
-            creator_wallet_address: req.user.walletAddress, // Add wallet address to metadata
+            creator_wallet_address: req.user.walletAddress,
             creator_organization_id: input.recipient.multisig_address,
             organization_name:
               input.organization.name ||
