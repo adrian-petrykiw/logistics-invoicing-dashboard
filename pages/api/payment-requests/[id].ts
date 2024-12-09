@@ -16,26 +16,31 @@ export default async function handler(
 
   try {
     const { id } = req.query;
+    console.log("Fetching payment request with ID:", id);
 
     const { data: paymentRequest, error } = await supabaseAdmin
       .from("transactions")
       .select(
         `
-        *,
-        sender:sender_organization_id (
-          name,
-          business_details
-        ),
-        recipient:recipient_organization_id (
-          name,
-          business_details
-        )
+        id,
+        amount,
+        due_date,
+        status,
+        metadata,
+        invoices,
+        sender,
+        recipient,
+        organization_id
       `
       )
       .eq("id", id)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase error:", error);
+      throw error;
+    }
+
     if (!paymentRequest) {
       return res.status(404).json({
         success: false,
@@ -43,9 +48,57 @@ export default async function handler(
       });
     }
 
+    // Fetch the sender organization (the one that will make the payment)
+    const { data: senderOrganization } = await supabaseAdmin
+      .from("organizations")
+      .select("name, business_details")
+      .eq("id", paymentRequest.organization_id)
+      .single();
+
+    // Fetch the recipient organization (the one that created the payment request)
+    const { data: recipientOrganization } = await supabaseAdmin
+      .from("organizations")
+      .select("name, business_details")
+      .eq(
+        "multisig_wallet",
+        paymentRequest.metadata.payment_request.creator_organization_id
+      )
+      .single();
+
+    const transformedData: PaymentRequestDetails = {
+      id: paymentRequest.id,
+      amount: paymentRequest.amount,
+      due_date: paymentRequest.due_date,
+      status: paymentRequest.status,
+      creator_email: paymentRequest.metadata?.payment_request?.creator_email,
+      invoices: paymentRequest.invoices || [],
+      metadata: paymentRequest.metadata || {},
+      sender: {
+        wallet_address: paymentRequest.sender.wallet_address,
+        multisig_address: paymentRequest.sender.multisig_address,
+        vault_address: paymentRequest.sender.vault_address,
+        organization: senderOrganization
+          ? {
+              name: senderOrganization.name,
+              business_details: senderOrganization.business_details,
+            }
+          : undefined,
+      },
+      recipient: {
+        multisig_address: paymentRequest.recipient.multisig_address,
+        vault_address: paymentRequest.recipient.vault_address,
+        organization: recipientOrganization
+          ? {
+              name: recipientOrganization.name,
+              business_details: recipientOrganization.business_details,
+            }
+          : undefined,
+      },
+    };
+
     return res.status(200).json({
       success: true,
-      data: paymentRequest as PaymentRequestDetails,
+      data: transformedData,
     });
   } catch (error) {
     console.error("Error fetching payment request:", error);

@@ -22,7 +22,8 @@ export interface Invoice {
 }
 
 export type TransactionStatus =
-  | "draft" // Initial payment request state
+  | "draft" // Payment request created but not activated
+  | "open" // Payment request active, ready for payment
   | "pending" // Payment requested, not yet paid
   | "processing" // Payment is being processed
   | "confirmed" // Transaction confirmed on chain
@@ -46,7 +47,7 @@ export interface TransactionRecord {
   proof_data: ProofData;
   status: TransactionStatus;
   amount: number;
-  transaction_type: "payment" | "transfer" | "other";
+  transaction_type: "payment" | "transfer" | "request" | "other";
   sender: TransactionParty;
   recipient: TransactionParty;
   invoices: Invoice[];
@@ -54,7 +55,7 @@ export interface TransactionRecord {
   updated_at: string;
   created_by: string;
   due_date?: string;
-  restricted_payment_methods?: PaymentMethod[]; // Changed from allowed_payment_methods
+  restricted_payment_methods?: PaymentMethod[];
   metadata?: {
     payment_request?: {
       requester_info?: {

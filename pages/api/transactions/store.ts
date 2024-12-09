@@ -22,7 +22,7 @@ const StoreTransactionSchema = z.object({
   token_mint: z.string(),
   proof_data: ProofDataSchema,
   amount: z.number(),
-  transaction_type: z.enum(["payment", "transfer", "other"]),
+  transaction_type: z.enum(["payment", "transfer", "request", "other"]),
   sender: TransactionPartySchema,
   recipient: TransactionPartySchema,
   invoices: z.array(

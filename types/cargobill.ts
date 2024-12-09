@@ -7,7 +7,7 @@ export interface TransactionRecord {
   amount: number;
   created_at: string;
   updated_at: string;
-  transaction_type: "payment" | "transfer" | "other";
+  transaction_type: "payment" | "transfer" | "request" | "other";
   sender_address: string;
   recipient_address: string;
   invoices: {

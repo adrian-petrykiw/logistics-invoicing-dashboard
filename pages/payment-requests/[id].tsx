@@ -65,14 +65,9 @@ export default function PaymentRequestPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto py-12 px-4">
-        <div className="space-y-8">
-          <div className="text-center">
-            <img
-              src="https://cargobill.co/logo-horizontal.svg"
-              alt="CargoBill"
-              className="h-8 mx-auto mb-8"
-            />
-            <h1 className="text-2xl font-semibold text-gray-900">
+        <div className="space-y-4">
+          <div className="text-start">
+            <h1 className="text-xl font-semibold text-gray-900">
               Payment Request Details
             </h1>
           </div>
@@ -89,33 +84,66 @@ export default function PaymentRequestPage() {
                 </div>
               </div>
 
-              {/* Sender Info */}
+              {/* Sender and Recipient Info */}
               <div className="border-t pt-4">
-                <h3 className="text-sm font-medium text-gray-900 mb-2">
-                  From:
-                </h3>
-                <div className="text-sm text-gray-600">
-                  <p className="font-medium">
-                    {
-                      paymentRequest.sender.organization?.business_details
-                        .companyName
-                    }
-                  </p>
-                  <p>
-                    {
-                      paymentRequest.sender.organization?.business_details
-                        .companyEmail
-                    }
-                  </p>
-                  {paymentRequest.sender.organization?.business_details
-                    .companyAddress && (
-                    <p>
-                      {
-                        paymentRequest.sender.organization.business_details
-                          .companyAddress
-                      }
-                    </p>
-                  )}
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 mb-2">
+                      From:
+                    </h3>
+                    <div className="text-sm text-gray-600">
+                      <p className="font-medium">
+                        {
+                          paymentRequest.sender.organization?.business_details
+                            .companyName
+                        }
+                      </p>
+                      <p>
+                        {
+                          paymentRequest.sender.organization?.business_details
+                            .companyEmail
+                        }
+                      </p>
+                      {paymentRequest.sender.organization?.business_details
+                        .companyAddress && (
+                        <p>
+                          {
+                            paymentRequest.sender.organization.business_details
+                              .companyAddress
+                          }
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 mb-2">
+                      To:
+                    </h3>
+                    <div className="text-sm text-gray-600">
+                      <p className="font-medium">
+                        {
+                          paymentRequest.recipient.organization
+                            ?.business_details.companyName
+                        }
+                      </p>
+                      <p>
+                        {
+                          paymentRequest.recipient.organization
+                            ?.business_details.companyEmail
+                        }
+                      </p>
+                      {paymentRequest.recipient.organization?.business_details
+                        .companyAddress && (
+                        <p>
+                          {
+                            paymentRequest.recipient.organization
+                              .business_details.companyAddress
+                          }
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -173,13 +201,9 @@ export default function PaymentRequestPage() {
 
               {/* Payment Action */}
               <div className="border-t pt-6">
-                {!connected ? (
+                {!connected || !isAuthenticated ? (
                   <Button className="w-full" size="lg">
-                    Connect Wallet to Pay
-                  </Button>
-                ) : !isAuthenticated ? (
-                  <Button className="w-full" size="lg">
-                    Sign In to Pay
+                    Login/Signup to Pay
                   </Button>
                 ) : (
                   <Button className="w-full" size="lg">

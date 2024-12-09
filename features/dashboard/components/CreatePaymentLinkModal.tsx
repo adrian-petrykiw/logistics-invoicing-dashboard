@@ -257,17 +257,22 @@ export function CreatePaymentLinkModal({
               },
         token_mint: USDC_MINT,
         amount: data.invoices.reduce((sum, inv) => sum + inv.amount, 0),
-        sender: {
+        recipient: {
           wallet_address: userWalletAddress,
           multisig_address: organization.multisig_wallet,
           vault_address: vaultAddress,
         },
-        recipient: vendorInfo
+        sender: vendorInfo
           ? {
               multisig_address: vendorInfo.multisigAddress,
               vault_address: vendorInfo.vaultAddress,
+              wallet_address: "pending",
             }
-          : undefined,
+          : {
+              multisig_address: "pending",
+              vault_address: "pending",
+              wallet_address: "pending",
+            },
         invoices: data.invoices.map(({ files, ...invoice }) => invoice),
         due_date: data.due_date.toISOString(),
         restricted_payment_methods: data.restricted_payment_methods,

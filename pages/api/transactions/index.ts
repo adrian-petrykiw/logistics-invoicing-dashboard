@@ -9,7 +9,7 @@ const CreateTransactionSchema = z.object({
   signature: z.string(),
   proof_json: z.string(),
   amount: z.number(),
-  transaction_type: z.enum(["payment", "transfer", "other"]),
+  transaction_type: z.enum(["payment", "transfer", "request", "other"]),
   sender_address: z.string(),
   recipient_address: z.string(),
   invoices: z.array(

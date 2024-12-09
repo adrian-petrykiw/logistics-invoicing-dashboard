@@ -31,17 +31,18 @@ const PaymentRequestSchema = z.object({
   creator_email: z.string().email(),
   token_mint: z.string(),
   amount: z.number(),
-  sender: z.object({
-    wallet_address: z.string(),
+  sender: z
+    .object({
+      wallet_address: z.string().optional(),
+      multisig_address: z.string().optional(), // Optional for new vendors
+      vault_address: z.string().optional(), // Optional for new vendors
+    })
+    .optional(),
+  recipient: z.object({
+    wallet_address: z.string().optional(),
     multisig_address: z.string(),
     vault_address: z.string(),
   }),
-  recipient: z
-    .object({
-      multisig_address: z.string(),
-      vault_address: z.string(),
-    })
-    .optional(),
   invoices: z.array(
     z.object({
       number: z.string(),
@@ -84,7 +85,7 @@ async function handler(
     let recipientEmail: string;
     let currentRecipientOrg: any;
 
-    // Handle organization
+    // Handle organization for the recipient (who will be paying)
     if (!input.organization.id) {
       // Create placeholder organization for new vendor
       const { data: newOrg, error: newOrgError } = await supabaseAdmin
@@ -127,7 +128,7 @@ async function handler(
       currentRecipientOrg = existingOrg;
     }
 
-    // Create transaction record
+    // Create transaction record with correct sender/recipient
     const { data: transaction, error: transError } = await supabaseAdmin
       .from("transactions")
       .insert({
@@ -137,12 +138,17 @@ async function handler(
           .substr(2, 9)}`,
         token_mint: input.token_mint,
         amount: input.amount,
-        transaction_type: "payment",
-        status: "draft",
-        sender: input.sender,
-        recipient: input.recipient || {
-          multisig_address: "pending",
+        transaction_type: "request",
+        status: "open",
+        sender: {
+          wallet_address: "pending",
+          multisig_address: currentRecipientOrg?.multisig_wallet || "pending",
           vault_address: "pending",
+        },
+        recipient: {
+          wallet_address: req.user.walletAddress, // Add the creator's wallet address
+          multisig_address: input.recipient.multisig_address,
+          vault_address: input.recipient.vault_address,
         },
         invoices: input.invoices,
         due_date: input.due_date,
@@ -151,9 +157,11 @@ async function handler(
           payment_request: {
             notes: input.notes,
             creator_email: input.creator_email,
+            creator_wallet_address: req.user.walletAddress, // Add wallet address to metadata
+            creator_organization_id: input.recipient.multisig_address,
             organization_name:
               input.organization.name ||
-              currentRecipientOrg.business_details.companyName ||
+              currentRecipientOrg?.business_details.companyName ||
               "Organization name not provided",
           },
         },
@@ -170,7 +178,7 @@ async function handler(
 
     // Handle email notifications
     try {
-      // Send email to recipient organization
+      // Send email to recipient organization (future sender)
       await emailService.sendEmail(
         recipientEmail,
         "New Payment Request",
