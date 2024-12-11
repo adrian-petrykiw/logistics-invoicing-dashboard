@@ -71,7 +71,7 @@ export default function TransactionsPage() {
     <main className="container mx-auto py-8">
       <div className="flex justify-between items-end mb-4">
         <div className="flex items-center gap-2">
-          <h1 className="text-lg font-bold text-tertiary">
+          <h1 className="text-lg font-semibold text-tertiary mb-0">
             Transaction History
           </h1>
           <Button

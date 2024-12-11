@@ -50,11 +50,12 @@ export class TransactionService {
     });
 
     if (!vendorResponse.ok) {
-      const errorText = await vendorResponse.text();
-      console.error("Vendor fetch error:", errorText);
-      throw new Error("Failed to fetch vendor details");
+      const errorData = await vendorResponse.json();
+      console.error("Vendor fetch error:", errorData);
+      throw new Error(
+        errorData.error?.error || "Failed to fetch vendor details"
+      );
     }
-
     const vendorData =
       (await vendorResponse.json()) as ApiResponse<VendorDetails>;
     console.log("Vendor response data:", vendorData);

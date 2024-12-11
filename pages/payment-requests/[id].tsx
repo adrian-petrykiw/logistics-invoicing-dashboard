@@ -91,17 +91,34 @@ export default function PaymentRequestPage() {
     error: paymentRequestError,
   } = usePaymentRequest(id as string);
 
-  // Fetch sender organization details
+  if (!paymentRequestLoading && !paymentRequestError) {
+    console.log("++++++++++++++ PAYMENT REQUEST IS: ", paymentRequest);
+  }
+
+  // Fetch sender organization
+  console.log("sender pubkey is: ", publicKey?.toBase58());
   const { organization: senderOrganization, isLoading: senderOrgLoading } =
-    useOrganization(paymentRequest?.sender?.wallet_address || "");
+    useOrganization(publicKey?.toBase58() || "");
+  console.log("sender org is: ", senderOrganization);
+
+  // Fetch sender organization details
+  console.log("Sender org id is: ", paymentRequest?.sender?.organization?.id);
+  const { data: senderOrgInfo, isLoading: senderOrgInfoLoading } =
+    useVendorInfo(paymentRequest?.sender?.organization?.id || null);
+  console.log("senderOrgInfo is: ", JSON.stringify(senderOrgInfo));
 
   // Fetch recipient organization details
-  const { data: recipientOrgInfo, isLoading: recipientOrgLoading } =
-    useVendorInfo(paymentRequest?.recipient?.organization?.name || null);
+  console.log(
+    "Recipient org id is: ",
+    paymentRequest?.recipient?.organization?.id
+  );
+  const { data: recipientOrgInfo, isLoading: recipientOrgInfoLoading } =
+    useVendorInfo(paymentRequest?.recipient?.organization?.id || null);
+  console.log("recipientOrgInfo is: ", JSON.stringify(recipientOrgInfo));
 
   // Get credit balance if organization exists and has a multisig
-  const multisigPda = recipientOrgInfo?.multisigAddress
-    ? new PublicKey(recipientOrgInfo.multisigAddress)
+  const multisigPda = senderOrganization?.multisig_wallet
+    ? new PublicKey(senderOrganization.multisig_wallet)
     : null;
 
   const { data: creditBalance, isLoading: balanceLoading } =
@@ -110,7 +127,8 @@ export default function PaymentRequestPage() {
   const isLoading =
     paymentRequestLoading ||
     senderOrgLoading ||
-    recipientOrgLoading ||
+    recipientOrgInfoLoading ||
+    senderOrgInfoLoading ||
     balanceLoading;
 
   // Organization registration form
@@ -135,7 +153,9 @@ export default function PaymentRequestPage() {
   });
 
   // Determine if organization needs registration
-  const needsRegistration = recipientOrgInfo?.multisigAddress === "pending";
+  const needsRegistration =
+    (!isLoading && paymentRequest?.sender.multisig_address === "pending") ||
+    paymentRequest?.sender.vault_address === "pending";
 
   const handlePayment = async () => {
     if (
@@ -216,6 +236,7 @@ export default function PaymentRequestPage() {
 
   const handleOnrampPayment = async () => {
     if (!publicKey || !paymentRequest || !recipientOrgInfo) {
+      toast.error("Organization must exist to onramp!");
       return;
     }
 
@@ -242,8 +263,8 @@ export default function PaymentRequestPage() {
         body: JSON.stringify({
           userWallet: publicKey.toString(),
           organizationId:
-            recipientOrgInfo.multisigAddress !== "pending"
-              ? recipientOrgInfo.multisigAddress
+            recipientOrgInfo?.multisigAddress !== "pending"
+              ? recipientOrgInfo?.multisigAddress
               : undefined,
         }),
       });
@@ -301,46 +322,82 @@ export default function PaymentRequestPage() {
   // Handle email verification
   const handleSendVerification = async () => {
     try {
-      const response = await fetch("/api/send-verification", {
+      const response = await fetch("/api/payment-requests/send-verification", {
+        // Fixed typo
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(user
+            ? {
+                "x-user-email": user.email,
+                "x-wallet-address": user.walletAddress,
+                "x-user-info": JSON.stringify(user.userInfo),
+              }
+            : {}),
+        },
         body: JSON.stringify({
+          organizationId: paymentRequest?.sender.organization?.id,
           email:
-            paymentRequest?.recipient.organization?.business_details
-              .companyEmail,
+            paymentRequest?.sender.organization?.business_details.companyEmail,
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to send verification code");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error?.error || "Failed to send verification code"
+        );
+      }
 
       setVerificationSent(true);
       toast.success("Verification code sent!");
     } catch (error) {
-      toast.error("Failed to send verification code");
+      console.error("Verification error:", error);
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to send verification code"
+      );
     }
   };
 
   // Handle verification code submission
   const handleVerifyCode = async (data: VerificationFormData) => {
     try {
-      const response = await fetch("/api/verify-code", {
+      const response = await fetch("/api/payment-requests/verify-code", {
+        // Updated path
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(user
+            ? {
+                "x-user-email": user.email,
+                "x-wallet-address": user.walletAddress,
+                "x-user-info": JSON.stringify(user.userInfo),
+              }
+            : {}),
+        },
         body: JSON.stringify({
+          organizationId: paymentRequest?.sender.organization?.id,
           email:
-            paymentRequest?.recipient.organization?.business_details
-              .companyEmail,
+            paymentRequest?.sender.organization?.business_details.companyEmail,
           code: data.code,
         }),
       });
 
-      if (!response.ok) throw new Error("Invalid verification code");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.error || "Invalid verification code");
+      }
 
       setVerificationComplete(true);
       setShowOrgRegistration(true);
       toast.success("Email verified successfully!");
     } catch (error) {
-      toast.error("Invalid verification code");
+      console.error("Verification error:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Invalid verification code"
+      );
     }
   };
 
@@ -410,7 +467,7 @@ export default function PaymentRequestPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-white">
         <div className="max-w-3xl mx-auto py-12 px-4">
           <div className="space-y-8">
             <Skeleton className="h-8 w-72 mx-auto" />
@@ -451,11 +508,11 @@ export default function PaymentRequestPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <div className="max-w-3xl mx-auto py-12 px-4">
         <div className="space-y-4">
           <div className="text-start">
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="text-xl font-semibold text-black">
               Payment Request Details
             </h1>
           </div>
@@ -463,7 +520,7 @@ export default function PaymentRequestPage() {
           <Card>
             <CardContent className="p-6 space-y-6">
               <div>
-                <div className="text-3xl font-bold text-gray-900">
+                <div className="text-3xl font-bold text-black">
                   ${paymentRequest.amount.toFixed(2)}
                 </div>
                 <div className="text-gray-600 mt-1">
@@ -476,11 +533,11 @@ export default function PaymentRequestPage() {
               <div className="border-t pt-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-2">
+                    <h3 className="text-sm font-semibold text-black mb-2">
                       From:
                     </h3>
-                    <div className="text-sm text-gray-600">
-                      <p className="font-medium">
+                    <div className="text-sm text-black font-normal">
+                      <p>
                         {
                           paymentRequest.sender.organization?.business_details
                             .companyName
@@ -505,11 +562,11 @@ export default function PaymentRequestPage() {
                   </div>
 
                   <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-2">
+                    <h3 className="text-sm font-semibold text-black mb-2">
                       To:
                     </h3>
-                    <div className="text-sm text-gray-600">
-                      <p className="font-medium">
+                    <div className="text-sm text-black font-normal">
+                      <p>
                         {
                           paymentRequest.recipient.organization
                             ?.business_details.companyName
@@ -537,7 +594,7 @@ export default function PaymentRequestPage() {
 
               {/* Invoices */}
               <div className="border-t pt-4">
-                <h3 className="text-sm font-medium text-gray-900 mb-3">
+                <h3 className="text-sm font-semibold text-black mb-3">
                   Invoices:
                 </h3>
                 <div className="space-y-3">
@@ -547,7 +604,7 @@ export default function PaymentRequestPage() {
                       className="flex items-start justify-between"
                     >
                       <div>
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-normal text-black">
                           Invoice {invoice.number}
                         </p>
                         {invoice.files && invoice.files.length > 0 && (
@@ -567,7 +624,7 @@ export default function PaymentRequestPage() {
                           </div>
                         )}
                       </div>
-                      <span className="text-sm text-gray-900">
+                      <span className="text-sm text-black">
                         ${invoice.amount.toFixed(2)}
                       </span>
                     </div>
@@ -578,10 +635,10 @@ export default function PaymentRequestPage() {
               {/* Notes */}
               {paymentRequest.metadata?.payment_request?.notes && (
                 <div className="border-t pt-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">
+                  <h3 className="text-sm font-semibold text-black mb-2">
                     Notes:
                   </h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-black">
                     {paymentRequest.metadata.payment_request.notes}
                   </p>
                 </div>
@@ -590,7 +647,7 @@ export default function PaymentRequestPage() {
               {/* Organization Registration Section */}
               {needsRegistration && isAuthenticated && !showOrgRegistration && (
                 <div className="border-t pt-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">
+                  <h3 className="text-sm font-semibold text-black mb-2">
                     Email Verification Required
                   </h3>
                   {!verificationSent ? (
@@ -629,9 +686,9 @@ export default function PaymentRequestPage() {
                 </div>
               )}
 
-              {showOrgRegistration && (
+              {needsRegistration && isAuthenticated && showOrgRegistration && (
                 <div className="border-t pt-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-4">
+                  <h3 className="text-sm font-semibold text-black mb-4">
                     Complete Organization Registration
                   </h3>
                   <Form {...orgForm}>
@@ -810,7 +867,7 @@ export default function PaymentRequestPage() {
                           {(creditBalance || 0) < paymentRequest.amount && (
                             <p className="text-red-500 mt-1">
                               Insufficient balance. Please choose another
-                              payment method or add funds.
+                              payment method!
                             </p>
                           )}
                         </div>

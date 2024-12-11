@@ -28,6 +28,7 @@ export interface PaymentRequestDetails {
     multisig_address: string;
     vault_address: string;
     organization?: {
+      id: string;
       name: string;
       business_details: {
         companyName: string;
@@ -41,6 +42,7 @@ export interface PaymentRequestDetails {
     multisig_address?: string;
     vault_address?: string;
     organization?: {
+      id: string;
       name: string;
       business_details: {
         companyName: string;

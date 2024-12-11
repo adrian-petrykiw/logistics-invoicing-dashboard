@@ -246,7 +246,7 @@ export function CreatePaymentLinkModal({
 
       const paymentRequestData = {
         creator_email: organization.business_details.companyEmail,
-        organization:
+        sending_organization:
           selectedVendor === "new"
             ? {
                 name: data.recipient.name,
@@ -255,6 +255,7 @@ export function CreatePaymentLinkModal({
             : {
                 id: selectedVendor,
               },
+        receiving_organization_id: organization.id,
         token_mint: USDC_MINT,
         amount: data.invoices.reduce((sum, inv) => sum + inv.amount, 0),
         recipient: {

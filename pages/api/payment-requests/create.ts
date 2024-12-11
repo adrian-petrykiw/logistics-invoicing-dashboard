@@ -9,7 +9,7 @@ import { getVaultPda } from "@sqds/multisig";
 import { PublicKey } from "@solana/web3.js";
 
 const PaymentRequestSchema = z.object({
-  organization: z
+  sending_organization: z
     .object({
       id: z.string().uuid().optional(),
       name: z.string().optional(),
@@ -29,6 +29,7 @@ const PaymentRequestSchema = z.object({
           "Either provide organization.id OR both organization.name and organization.email, but not both",
       }
     ),
+  receiving_organization_id: z.string().uuid(),
   creator_email: z.string().email(),
   token_mint: z.string(),
   amount: z.number(),
@@ -87,18 +88,18 @@ async function handler(
     let currentRecipientOrg: any;
 
     // Handle organization for the recipient (who will be paying)
-    if (!input.organization.id) {
+    if (!input.sending_organization.id) {
       // Create placeholder organization for new vendor
       const { data: newOrg, error: newOrgError } = await supabaseAdmin
         .from("organizations")
         .insert({
-          name: input.organization.name!,
+          name: input.sending_organization.name!,
           multisig_wallet: "pending",
           business_details: {
-            companyName: input.organization.name!,
-            companyEmail: input.organization.email!,
+            companyName: input.sending_organization.name!,
+            companyEmail: input.sending_organization.email!,
             ownerName: "Pending Registration",
-            ownerEmail: input.organization.email!,
+            ownerEmail: input.sending_organization.email!,
             ownerWalletAddress: "pending",
           },
           created_by: user.id,
@@ -108,14 +109,14 @@ async function handler(
 
       if (newOrgError) throw newOrgError;
       recipientOrgId = newOrg.id;
-      recipientEmail = input.organization.email!;
+      recipientEmail = input.sending_organization.email!;
       currentRecipientOrg = newOrg;
     } else {
       // Fetch existing organization's details
       const { data: existingOrg, error: orgError } = await supabaseAdmin
         .from("organizations")
         .select("id, business_details, multisig_wallet")
-        .eq("id", input.organization.id)
+        .eq("id", input.sending_organization.id)
         .single();
 
       if (orgError || !existingOrg) {
@@ -178,9 +179,8 @@ async function handler(
             notes: input.notes,
             creator_email: input.creator_email,
             creator_wallet_address: req.user.walletAddress,
-            creator_organization_id: input.recipient.multisig_address,
-            organization_name:
-              input.organization.name ||
+            creator_organization_id: input.receiving_organization_id,
+            creator_organization_name:
               currentRecipientOrg?.business_details.companyName ||
               "Organization name not provided",
           },

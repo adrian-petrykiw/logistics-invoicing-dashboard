@@ -48,22 +48,28 @@ export default async function handler(
       });
     }
 
+    console.log(
+      "        paymentRequest.metadata.payment_request.creator_organization_id: ",
+      paymentRequest.metadata.payment_request.creator_organization_id
+    );
+
     // Fetch the sender organization (the one that will make the payment)
     const { data: senderOrganization } = await supabaseAdmin
       .from("organizations")
-      .select("name, business_details")
+      .select("id, name, business_details")
       .eq("id", paymentRequest.organization_id)
       .single();
 
     // Fetch the recipient organization (the one that created the payment request)
     const { data: recipientOrganization } = await supabaseAdmin
       .from("organizations")
-      .select("name, business_details")
-      .eq(
-        "multisig_wallet",
-        paymentRequest.metadata.payment_request.creator_organization_id
-      )
+      .select("id, name, business_details")
+      .eq("id", paymentRequest.metadata.payment_request.creator_organization_id)
       .single();
+
+    console.log("+++++ Sender Organization is: ", senderOrganization);
+    console.log("+++++ Recipient Organization is: ", recipientOrganization);
+    console.log("+++++ paymentRequest is: ", paymentRequest);
 
     const transformedData: PaymentRequestDetails = {
       id: paymentRequest.id,
@@ -79,6 +85,7 @@ export default async function handler(
         vault_address: paymentRequest.sender.vault_address,
         organization: senderOrganization
           ? {
+              id: paymentRequest.organization_id,
               name: senderOrganization.name,
               business_details: senderOrganization.business_details,
             }
@@ -89,6 +96,8 @@ export default async function handler(
         vault_address: paymentRequest.recipient.vault_address,
         organization: recipientOrganization
           ? {
+              id: paymentRequest.metadata.payment_request
+                .creator_organization_id,
               name: recipientOrganization.name,
               business_details: recipientOrganization.business_details,
             }
