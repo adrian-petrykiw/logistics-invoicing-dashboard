@@ -880,108 +880,114 @@ export default function PaymentRequestPage() {
               )}
 
               {/* Regular Payment Section */}
-              {!needsRegistration && isAuthenticated && (
-                <>
-                  {/* Payment Method Selection */}
-                  <div className="border-t pt-4">
-                    <h3 className="text-sm font-medium text-gray-900 mb-4">
-                      Payment Method
-                    </h3>
-                    <Form {...paymentForm}>
-                      <form className="space-y-4">
-                        <FormField
-                          control={paymentForm.control}
-                          name="paymentMethod"
-                          render={({ field }) => (
-                            <FormItem>
-                              <Select
-                                onValueChange={(value) => {
-                                  field.onChange(value);
-                                  setSelectedPaymentMethod(value);
-                                }}
-                                defaultValue={field.value}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select payment method" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="account_credit">
-                                    Available Credit
-                                  </SelectItem>
-                                  <SelectItem value="credit_card">
-                                    Credit Card
-                                  </SelectItem>
-                                  <SelectItem value="debit_card">
-                                    Debit Card
-                                  </SelectItem>
-                                  <SelectItem value="ach">
-                                    ACH Transfer
-                                  </SelectItem>
-                                  <SelectItem value="wire">
-                                    Wire Transfer
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        {selectedPaymentMethod === "account_credit" && (
-                          <div className="text-sm">
-                            <p className="text-gray-600">
-                              Available Balance: $
-                              {creditBalance?.toFixed(2) || "0.00"} USDC
-                            </p>
-                            {(creditBalance || 0) < paymentRequest.amount && (
-                              <p className="text-red-500 mt-1">
-                                Insufficient balance. Please choose another
-                                payment method!
-                              </p>
+              {isAuthenticated ? (
+                !needsRegistration && (
+                  <>
+                    {/* Payment Method Selection */}
+                    <div className="border-t pt-4">
+                      <h3 className="text-sm font-medium text-gray-900 mb-4">
+                        Payment Method
+                      </h3>
+                      <Form {...paymentForm}>
+                        <form className="space-y-4">
+                          <FormField
+                            control={paymentForm.control}
+                            name="paymentMethod"
+                            render={({ field }) => (
+                              <FormItem>
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(value);
+                                    setSelectedPaymentMethod(value);
+                                  }}
+                                  defaultValue={field.value}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select payment method" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="account_credit">
+                                      Available Credit
+                                    </SelectItem>
+                                    <SelectItem value="credit_card">
+                                      Credit Card
+                                    </SelectItem>
+                                    <SelectItem value="debit_card">
+                                      Debit Card
+                                    </SelectItem>
+                                    <SelectItem value="ach">
+                                      ACH Transfer
+                                    </SelectItem>
+                                    <SelectItem value="wire">
+                                      Wire Transfer
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
                             )}
-                          </div>
-                        )}
-                      </form>
-                    </Form>
-                  </div>
+                          />
 
-                  {/* Payment Action */}
-                  <div className="border-t pt-6">
-                    {!connected || !isAuthenticated ? (
-                      <Button className="w-full" size="lg" disabled={true}>
-                        Login/Signup to Pay
-                      </Button>
-                    ) : processingPayment ? (
-                      <Button className="w-full" size="lg" disabled>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing Payment...
-                      </Button>
-                    ) : selectedPaymentMethod === "account_credit" ? (
-                      <Button
-                        className="w-full"
-                        size="lg"
-                        disabled={(creditBalance || 0) < paymentRequest.amount}
-                        onClick={handlePayment}
-                      >
-                        Pay with Available Credit
-                      </Button>
-                    ) : selectedPaymentMethod ? (
-                      <Button
-                        className="w-full"
-                        size="lg"
-                        onClick={handleOnrampPayment}
-                      >
-                        Continue with Payment
-                      </Button>
-                    ) : (
-                      <Button className="w-full" size="lg" disabled>
-                        Select Payment Method
-                      </Button>
-                    )}
-                  </div>
-                </>
+                          {selectedPaymentMethod === "account_credit" && (
+                            <div className="text-sm">
+                              <p className="text-gray-600">
+                                Available Balance: $
+                                {creditBalance?.toFixed(2) || "0.00"} USDC
+                              </p>
+                              {(creditBalance || 0) < paymentRequest.amount && (
+                                <p className="text-red-500 mt-1">
+                                  Insufficient balance. Please choose another
+                                  payment method!
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </form>
+                      </Form>
+                    </div>
+
+                    {/* Payment Action */}
+                    <div className="border-t pt-6">
+                      {processingPayment ? (
+                        <Button className="w-full" size="lg" disabled>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing Payment...
+                        </Button>
+                      ) : selectedPaymentMethod === "account_credit" ? (
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          disabled={
+                            (creditBalance || 0) < paymentRequest.amount
+                          }
+                          onClick={handlePayment}
+                        >
+                          Pay with Available Credit
+                        </Button>
+                      ) : selectedPaymentMethod ? (
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={handleOnrampPayment}
+                        >
+                          Continue with Payment
+                        </Button>
+                      ) : (
+                        <Button className="w-full" size="lg" disabled>
+                          Select Payment Method
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )
+              ) : (
+                <div className="border-t pt-6">
+                  <Button className="w-full" size="lg" disabled={true}>
+                    Login/Signup to Pay
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
