@@ -519,6 +519,7 @@ export default function PaymentRequestPage() {
 
           <Card>
             <CardContent className="p-6 space-y-6">
+              {/* Amount and Due Date */}
               <div>
                 <div className="text-3xl font-bold text-black">
                   ${paymentRequest.amount.toFixed(2)}
@@ -644,273 +645,344 @@ export default function PaymentRequestPage() {
                 </div>
               )}
 
-              {/* Organization Registration Section */}
-              {needsRegistration && isAuthenticated && !showOrgRegistration && (
-                <div className="border-t pt-4">
-                  <h3 className="text-sm font-semibold text-black mb-2">
-                    Email Verification Required
-                  </h3>
-                  {!verificationSent ? (
-                    <Button onClick={handleSendVerification}>
-                      Send Verification Code
-                    </Button>
-                  ) : (
-                    <Form {...verificationForm}>
-                      <form
-                        onSubmit={verificationForm.handleSubmit(
-                          handleVerifyCode
-                        )}
-                      >
-                        <div className="space-y-4">
-                          <FormField
-                            control={verificationForm.control}
-                            name="code"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Verification Code</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    {...field}
-                                    placeholder="Enter 6-digit code"
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
+              {/* Organization Registration and Payment Section */}
+              {needsRegistration && isAuthenticated && (
+                <>
+                  {!verificationComplete ? (
+                    <div className="border-t pt-4">
+                      <h3 className="text-sm font-semibold text-black mb-2">
+                        Email Verification Required
+                      </h3>
+                      {!verificationSent ? (
+                        <Button onClick={handleSendVerification}>
+                          Send Verification Code
+                        </Button>
+                      ) : (
+                        <Form {...verificationForm}>
+                          <form
+                            onSubmit={verificationForm.handleSubmit(
+                              handleVerifyCode
                             )}
-                          />
-                          <Button type="submit">Verify Code</Button>
-                        </div>
+                          >
+                            <div className="space-y-4">
+                              <FormField
+                                control={verificationForm.control}
+                                name="code"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Verification Code</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        placeholder="Enter 6-digit code"
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <Button type="submit">Verify Code</Button>
+                            </div>
+                          </form>
+                        </Form>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Organization Registration Form */}
+                      <div className="border-t pt-4">
+                        <h3 className="text-sm font-semibold text-black mb-4">
+                          Complete Organization Registration
+                        </h3>
+                        <Form {...orgForm}>
+                          <form className="space-y-4">
+                            <FormField
+                              control={orgForm.control}
+                              name="ownerName"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Owner Name</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={orgForm.control}
+                                name="companyName"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Company Name</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={orgForm.control}
+                                name="companyPhone"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Company Phone</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} type="tel" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+
+                            <FormField
+                              control={orgForm.control}
+                              name="companyAddress"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Company Address</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={orgForm.control}
+                                name="registrationNumber"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Registration Number</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              <FormField
+                                control={orgForm.control}
+                                name="taxNumber"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Tax Number</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+
+                            <FormField
+                              control={orgForm.control}
+                              name="companyWebsite"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Company Website</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      type="url"
+                                      placeholder="https://"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </form>
+                        </Form>
+                      </div>
+
+                      {/* Payment Method Selection */}
+                      <div className="border-t pt-4">
+                        <h3 className="text-sm font-medium text-gray-900 mb-4">
+                          Select Payment Method
+                        </h3>
+                        <Form {...paymentForm}>
+                          <form className="space-y-4">
+                            <FormField
+                              control={paymentForm.control}
+                              name="paymentMethod"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <Select
+                                    onValueChange={(value) => {
+                                      field.onChange(value);
+                                      setSelectedPaymentMethod(value);
+                                    }}
+                                    defaultValue={field.value}
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select payment method" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="credit_card">
+                                        Credit Card
+                                      </SelectItem>
+                                      <SelectItem value="debit_card">
+                                        Debit Card
+                                      </SelectItem>
+                                      <SelectItem value="ach">
+                                        ACH Transfer
+                                      </SelectItem>
+                                      <SelectItem value="wire">
+                                        Wire Transfer
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </form>
+                        </Form>
+                      </div>
+
+                      {/* Combined Action Button */}
+                      <div className="border-t pt-6">
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          disabled={!selectedPaymentMethod || processingPayment}
+                          onClick={async () => {
+                            const orgData = orgForm.getValues();
+                            await handleOrgRegistration(orgData);
+                            await handleOnrampPayment();
+                          }}
+                        >
+                          {processingPayment ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Processing...
+                            </>
+                          ) : (
+                            "Complete Payment"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Regular Payment Section */}
+              {!needsRegistration && isAuthenticated && (
+                <>
+                  {/* Payment Method Selection */}
+                  <div className="border-t pt-4">
+                    <h3 className="text-sm font-medium text-gray-900 mb-4">
+                      Payment Method
+                    </h3>
+                    <Form {...paymentForm}>
+                      <form className="space-y-4">
+                        <FormField
+                          control={paymentForm.control}
+                          name="paymentMethod"
+                          render={({ field }) => (
+                            <FormItem>
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setSelectedPaymentMethod(value);
+                                }}
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select payment method" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="account_credit">
+                                    Available Credit
+                                  </SelectItem>
+                                  <SelectItem value="credit_card">
+                                    Credit Card
+                                  </SelectItem>
+                                  <SelectItem value="debit_card">
+                                    Debit Card
+                                  </SelectItem>
+                                  <SelectItem value="ach">
+                                    ACH Transfer
+                                  </SelectItem>
+                                  <SelectItem value="wire">
+                                    Wire Transfer
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {selectedPaymentMethod === "account_credit" && (
+                          <div className="text-sm">
+                            <p className="text-gray-600">
+                              Available Balance: $
+                              {creditBalance?.toFixed(2) || "0.00"} USDC
+                            </p>
+                            {(creditBalance || 0) < paymentRequest.amount && (
+                              <p className="text-red-500 mt-1">
+                                Insufficient balance. Please choose another
+                                payment method!
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </form>
                     </Form>
-                  )}
-                </div>
-              )}
+                  </div>
 
-              {needsRegistration && isAuthenticated && showOrgRegistration && (
-                <div className="border-t pt-4">
-                  <h3 className="text-sm font-semibold text-black mb-4">
-                    Complete Organization Registration
-                  </h3>
-                  <Form {...orgForm}>
-                    <form
-                      onSubmit={orgForm.handleSubmit(handleOrgRegistration)}
-                      className="space-y-4"
-                    >
-                      <FormField
-                        control={orgForm.control}
-                        name="ownerName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Owner Name</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={orgForm.control}
-                          name="companyName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Company Name</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={orgForm.control}
-                          name="companyPhone"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Company Phone</FormLabel>
-                              <FormControl>
-                                <Input {...field} type="tel" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <FormField
-                        control={orgForm.control}
-                        name="companyAddress"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Company Address</FormLabel>
-                            <FormControl>
-                              <Input {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={orgForm.control}
-                          name="registrationNumber"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Registration Number</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={orgForm.control}
-                          name="taxNumber"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Tax Number</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <FormField
-                        control={orgForm.control}
-                        name="companyWebsite"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Company Website</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                type="url"
-                                placeholder="https://"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <Button type="submit" className="w-full">
-                        Register Organization
+                  {/* Payment Action */}
+                  <div className="border-t pt-6">
+                    {!connected || !isAuthenticated ? (
+                      <Button className="w-full" size="lg" disabled={true}>
+                        Login/Signup to Pay
                       </Button>
-                    </form>
-                  </Form>
-                </div>
+                    ) : processingPayment ? (
+                      <Button className="w-full" size="lg" disabled>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing Payment...
+                      </Button>
+                    ) : selectedPaymentMethod === "account_credit" ? (
+                      <Button
+                        className="w-full"
+                        size="lg"
+                        disabled={(creditBalance || 0) < paymentRequest.amount}
+                        onClick={handlePayment}
+                      >
+                        Pay with Available Credit
+                      </Button>
+                    ) : selectedPaymentMethod ? (
+                      <Button
+                        className="w-full"
+                        size="lg"
+                        onClick={handleOnrampPayment}
+                      >
+                        Continue with Payment
+                      </Button>
+                    ) : (
+                      <Button className="w-full" size="lg" disabled>
+                        Select Payment Method
+                      </Button>
+                    )}
+                  </div>
+                </>
               )}
-
-              {/* Payment Method Selection */}
-              {isAuthenticated && !needsRegistration && (
-                <div className="border-t pt-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-4">
-                    Payment Method
-                  </h3>
-                  <Form {...paymentForm}>
-                    <form className="space-y-4">
-                      <FormField
-                        control={paymentForm.control}
-                        name="paymentMethod"
-                        render={({ field }) => (
-                          <FormItem>
-                            <Select
-                              onValueChange={(value) => {
-                                field.onChange(value);
-                                setSelectedPaymentMethod(value);
-                              }}
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select payment method" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="account_credit">
-                                  Available Credit
-                                </SelectItem>
-                                <SelectItem value="credit_card">
-                                  Credit Card
-                                </SelectItem>
-                                <SelectItem value="debit_card">
-                                  Debit Card
-                                </SelectItem>
-                                <SelectItem value="ach">
-                                  ACH Transfer
-                                </SelectItem>
-                                <SelectItem value="wire">
-                                  Wire Transfer
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {selectedPaymentMethod === "account_credit" && (
-                        <div className="text-sm">
-                          <p className="text-gray-600">
-                            Available Balance: $
-                            {creditBalance?.toFixed(2) || "0.00"} USDC
-                          </p>
-                          {(creditBalance || 0) < paymentRequest.amount && (
-                            <p className="text-red-500 mt-1">
-                              Insufficient balance. Please choose another
-                              payment method!
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </form>
-                  </Form>
-                </div>
-              )}
-
-              {/* Payment Action */}
-              <div className="border-t pt-6">
-                {!connected || !isAuthenticated ? (
-                  <Button className="w-full" size="lg" disabled={true}>
-                    Login/Signup to Pay
-                  </Button>
-                ) : processingPayment ? (
-                  <Button className="w-full" size="lg" disabled>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing Payment...
-                  </Button>
-                ) : selectedPaymentMethod === "account_credit" ? (
-                  <Button
-                    className="w-full"
-                    size="lg"
-                    disabled={(creditBalance || 0) < paymentRequest.amount}
-                    onClick={handlePayment}
-                  >
-                    Pay with Available Credit
-                  </Button>
-                ) : selectedPaymentMethod ? (
-                  <Button
-                    className="w-full"
-                    size="lg"
-                    onClick={handleOnrampPayment}
-                  >
-                    Continue with Payment
-                  </Button>
-                ) : (
-                  <Button className="w-full" size="lg" disabled>
-                    Select Payment Method
-                  </Button>
-                )}
-              </div>
             </CardContent>
           </Card>
         </div>
