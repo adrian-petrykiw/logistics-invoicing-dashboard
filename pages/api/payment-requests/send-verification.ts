@@ -91,13 +91,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
     await emailService.sendEmail(
       email,
-      "Verify Your Organization Email - CargoBill",
+      "Verificayion Code - CargoBill",
       emailHtml
     );
 
     return res.status(200).json({
       success: true,
-      data: { message: "Verification code sent successfully" },
+      data: { message: "Verification code sent" },
     });
   } catch (error) {
     console.error("Error sending verification code:", error);
