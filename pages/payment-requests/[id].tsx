@@ -496,8 +496,8 @@ export default function PaymentRequestPage() {
             Payment Request Not Found
           </h1>
           <p className="text-gray-600 mb-6">
-            The payment request you're looking for doesn't exist or has been
-            removed.
+            The payment request you&apos;re looking for doesn&apos;t exist or
+            has been removed.
           </p>
           <Link href="/">
             <Button variant="outline">Return Home</Button>
