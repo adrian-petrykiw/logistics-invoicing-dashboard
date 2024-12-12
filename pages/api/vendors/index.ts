@@ -32,17 +32,19 @@ async function handler(
   try {
     console.log("Fetching organizations for user:", req.user.id);
 
-    // Get filtered organizations
+    // Get filtered organizations, excluding those with pending multisig wallets
     const { data: orgs, error: orgsError } = await supabaseAdmin
       .from("organizations")
       .select(
         `
         id,
         business_details,
-        created_by
+        created_by,
+        multisig_wallet
       `
       )
       .neq("created_by", req.user.id)
+      .neq("multisig_wallet", "pending")
       .order("created_at", { ascending: false });
 
     if (orgsError) {
@@ -80,4 +82,5 @@ async function handler(
     });
   }
 }
+
 export default withAuth(handler);

@@ -146,6 +146,7 @@ async function handler(
         senderVaultAddress = vaultPda.toBase58();
       } catch (error) {
         console.error("Failed to derive vault address:", error);
+        throw Error("Failed to derive vault address");
       }
     }
 
@@ -219,7 +220,7 @@ async function handler(
       );
     } catch (emailError: any) {
       console.error("Failed to send email notifications:", emailError);
-      // Continue even if emails fail
+      throw Error("Failed to send email notifications: ", emailError);
     }
 
     return res.status(201).json({
