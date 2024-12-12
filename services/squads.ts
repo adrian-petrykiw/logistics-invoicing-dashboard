@@ -5,9 +5,49 @@ import {
   PublicKey,
   Signer,
   Transaction,
+  TransactionInstruction,
+  TransactionMessage,
 } from "@solana/web3.js";
 import { ParsedMultisigAccount } from "@/types/types";
 const { Permission, Permissions } = multisig.types;
+import {
+  createTransferInstruction,
+  getAssociatedTokenAddress,
+} from "@solana/spl-token";
+import {
+  getAccountsForExecuteCore,
+  transactionMessageToVaultMessage,
+  vaultTransactionExecuteSync,
+} from "@/utils/squads";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  USDC_MINT,
+} from "@/utils/constants";
+import { getTransactionPda } from "@sqds/multisig";
+
+export interface CreateVaultTransferParams {
+  amount: number;
+  senderMultisigPda: PublicKey;
+  senderVaultPda: PublicKey;
+  recipientVaultPda: PublicKey;
+  creator: PublicKey;
+}
+
+export interface CreateVaultTransferResult {
+  createIx: TransactionInstruction;
+  transactionIndex: bigint;
+  message: TransactionMessage;
+  transferIx: TransactionInstruction;
+}
+
+export interface ExecuteVaultTransactionParams {
+  senderMultisigPda: PublicKey;
+  senderVaultPda: PublicKey;
+  transactionIndex: bigint;
+  member: PublicKey;
+  ixs: TransactionInstruction[];
+}
 
 export interface VaultTransactionInfo {
   publicKey: PublicKey;
@@ -454,6 +494,149 @@ export class SquadsService {
       console.error("Error fetching multisig transactions:", error);
       throw error;
     }
+  }
+
+  async createVaultTransfer({
+    amount,
+    senderMultisigPda,
+    senderVaultPda,
+    recipientVaultPda,
+    creator,
+  }: CreateVaultTransferParams): Promise<CreateVaultTransferResult> {
+    try {
+      // Get sender's multisig info
+      const senderMultisigInfo =
+        await multisig.accounts.Multisig.fromAccountAddress(
+          this.connection,
+          senderMultisigPda
+        );
+
+      // Get USDC ATAs
+      const senderUsdcAta = await getAssociatedTokenAddress(
+        USDC_MINT,
+        senderVaultPda,
+        true,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+
+      const recipientUsdcAta = await getAssociatedTokenAddress(
+        USDC_MINT,
+        recipientVaultPda,
+        true,
+        TOKEN_PROGRAM_ID,
+        ASSOCIATED_TOKEN_PROGRAM_ID
+      );
+
+      // Create transfer instruction
+      const transferIx = createTransferInstruction(
+        senderUsdcAta,
+        recipientUsdcAta,
+        senderVaultPda,
+        BigInt(Math.round(amount * 1e6))
+      );
+
+      // Get next transaction index
+      const newTransactionIndex = BigInt(
+        Number(senderMultisigInfo.transactionIndex) + 1
+      );
+
+      // Create transaction message
+      const transferMessage = new TransactionMessage({
+        payerKey: senderVaultPda,
+        recentBlockhash: (await this.connection.getLatestBlockhash()).blockhash,
+        instructions: [transferIx],
+      });
+
+      // Create vault transaction
+      const createIx = await multisig.instructions.vaultTransactionCreate({
+        multisigPda: senderMultisigPda,
+        transactionIndex: newTransactionIndex,
+        creator,
+        vaultIndex: 0,
+        ephemeralSigners: 0,
+        transactionMessage: transferMessage,
+        memo: `Payment Request Transfer`,
+      });
+
+      return {
+        createIx,
+        transactionIndex: newTransactionIndex,
+        message: transferMessage,
+        transferIx,
+      };
+    } catch (error) {
+      console.error("Error creating vault transfer:", error);
+      throw error;
+    }
+  }
+
+  async proposeVaultTransaction(
+    multisigPda: PublicKey,
+    transactionIndex: bigint,
+    creator: PublicKey
+  ) {
+    return multisig.instructions.proposalCreate({
+      multisigPda,
+      transactionIndex,
+      creator,
+    });
+  }
+
+  async approveVaultTransaction(
+    multisigPda: PublicKey,
+    transactionIndex: bigint,
+    member: PublicKey
+  ) {
+    return multisig.instructions.proposalApprove({
+      multisigPda,
+      transactionIndex,
+      member,
+    });
+  }
+
+  async executeVaultTransaction({
+    senderMultisigPda,
+    senderVaultPda,
+    transactionIndex,
+    member,
+    ixs,
+  }: ExecuteVaultTransactionParams) {
+    const [transactionPda] = getTransactionPda({
+      multisigPda: senderMultisigPda,
+      index: transactionIndex,
+    });
+
+    const transferMessage = new TransactionMessage({
+      payerKey: senderMultisigPda,
+      recentBlockhash: (await this.connection.getLatestBlockhash()).blockhash,
+      instructions: ixs,
+    });
+
+    console.log("Compiling vault message...");
+    const compiledMessage = transactionMessageToVaultMessage({
+      message: transferMessage,
+      addressLookupTableAccounts: [],
+      vaultPda: senderVaultPda,
+    });
+
+    const { accountMetas } = await getAccountsForExecuteCore({
+      connection: this.connection,
+      multisigPda: senderMultisigPda,
+      message: compiledMessage,
+      ephemeralSignerBumps: [0],
+      vaultIndex: 0,
+      transactionPda,
+      programId: multisig.PROGRAM_ID,
+    });
+
+    return vaultTransactionExecuteSync({
+      multisigPda: senderMultisigPda,
+      transactionIndex,
+      member,
+      accountsForExecute: accountMetas,
+      programId: multisig.PROGRAM_ID,
+    });
   }
 }
 

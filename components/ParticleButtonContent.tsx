@@ -31,7 +31,7 @@ const ParticleButtonContent = () => {
         await select("Particle" as WalletName);
       } catch (error) {
         console.error("Connection error:", error);
-        toast.error("Connection error!");
+        toast.error("Connection error");
       }
     }
   }, [connected, connecting, select, disconnect]);

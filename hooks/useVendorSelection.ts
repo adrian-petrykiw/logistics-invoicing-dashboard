@@ -13,13 +13,14 @@ export function useVendorSelection(vendorId: string | null) {
     queryKey: ["vendorSelection", vendorId],
     queryFn: async () => {
       if (!vendorId) return null;
+      if (vendorId === "new") return null; // Add this line to handle "new" case
       const response = await api.get<ApiResponse<VendorDetails>>(
         `/vendors/${vendorId}`
       );
       if (!response.success) throw new Error(response.error.error);
       return response.data;
     },
-    enabled: !!vendorId && !!apiUser,
+    enabled: !!vendorId && !!apiUser && vendorId !== "new", // Modify enabled condition
     // staleTime: 10 * 60 * 1000,
     // gcTime: 15 * 60 * 1000,
   });
