@@ -417,13 +417,6 @@ export function VendorRegistrationModal({
         }
       }}
     >
-      {/* <Dialog open={isOpen} onOpenChange={handleOpenChange}> */}
-      <DialogTrigger asChild>
-        <Button>
-          <FiPlus /> Register Vendor
-        </Button>
-      </DialogTrigger>
-
       <DialogContent
         className="max-w-2xl max-h-[90vh] overflow-y-auto"
         onPointerDownOutside={(e) => {
