@@ -74,6 +74,17 @@ export default function SettingsPage() {
     }
   }, [connected, wallet?.adapter.name]);
 
+  console.log({
+    isCreateOrgModalOpen,
+    userInfo,
+    organization: !!organization,
+    orgLoading,
+  });
+
+  const handleRegistrationSuccess = () => {
+    toast.success("Organization registered successfully!");
+  };
+
   const handleAddMember = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -172,16 +183,20 @@ export default function SettingsPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Organization</CardTitle>
-
-            {!organization && (
-              <VendorRegistrationModal
-                isOpen={isCreateOrgModalOpen}
-                onOpenChange={setIsCreateOrgModalOpen}
-                userInfo={userInfo}
-                onSubmitSuccess={() => {}}
-                createMultisig={createMultisigMutation}
-                createOrganization={createOrganization}
-              />
+            {!organization && !orgLoading && (
+              <>
+                <Button onClick={() => setIsCreateOrgModalOpen(true)}>
+                  <FiPlus className="mr-2" /> Register Vendor
+                </Button>
+                <VendorRegistrationModal
+                  isOpen={isCreateOrgModalOpen}
+                  onOpenChange={setIsCreateOrgModalOpen}
+                  userInfo={userInfo}
+                  onSubmitSuccess={handleRegistrationSuccess}
+                  createMultisig={createMultisigMutation}
+                  createOrganization={createOrganization}
+                />
+              </>
             )}
           </CardHeader>
           <CardContent>
@@ -191,7 +206,6 @@ export default function SettingsPage() {
                   <div className="col-span-2">
                     <div className="p-4 border-gray-200 border-[1px] rounded-sm">
                       <h4 className="text-sm font-semibold">
-                        {" "}
                         {organization.business_details?.companyName}
                       </h4>
                       <div className="p-0 m-0 space-y-2">
@@ -236,7 +250,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-sm font-medium"> Multisig Account</p>
+                    <p className="text-sm font-medium">Multisig Account</p>
                     <Input
                       value={`${organization.multisig_wallet}`}
                       disabled
@@ -254,7 +268,7 @@ export default function SettingsPage() {
                 {/* Team Members */}
                 <div className="space-y-4">
                   <div className="flex items-end justify-between">
-                    <h3 className="text-sm font-medium mb-[-8px]"> Members</h3>
+                    <h3 className="text-sm font-medium mb-[-8px]">Members</h3>
                     {canModifyMembers && (
                       <Dialog
                         open={isAddMemberModalOpen}
@@ -264,14 +278,6 @@ export default function SettingsPage() {
                           <Button>
                             <FiPlus className="mr-2" /> Add Member
                           </Button>
-
-                          {/* <button
-                            type="button"
-                            // onClick={() => append({ number: "", amount: 0 })}
-                            className="font-light text-center text-sm text-muted-foreground hover:text-black transition-colors flex items-center justify-end mr-2"
-                          >
-                            <FiPlus className="mr-[4px]" /> Add Member
-                          </button> */}
                         </DialogTrigger>
                         <DialogContent
                           onPointerDownOutside={(e) => {
@@ -296,10 +302,6 @@ export default function SettingsPage() {
                               <Label>Email</Label>
                               <Input name="email" type="email" required />
                             </div>
-                            {/* <div className="space-y-2">
-                              <Label>Wallet Address</Label>
-                              <Input name="walletAddress" required />
-                            </div> */}
                             <div className="space-y-2">
                               <Label>Role</Label>
                               <Select name="role" required>
@@ -312,9 +314,6 @@ export default function SettingsPage() {
                                 </SelectContent>
                               </Select>
                             </div>
-                            {/* <Button type="submit" className="w-full">
-                              Add Member 
-                            </Button> */}
                             <Button type="submit" className="w-full" disabled>
                               COMING SOON
                             </Button>
@@ -355,9 +354,6 @@ export default function SettingsPage() {
                               {member.role.charAt(0).toUpperCase() +
                                 member.role.slice(1)}
                             </p>
-                            {/* <p className="text-sm text-muted-foreground truncate">
-                              {member.wallet_address || "N/A"}
-                            </p> */}
                           </div>
                           {canModifyMembers && member.role !== "owner" && (
                             <div className="flex gap-2">

@@ -150,7 +150,11 @@ export function createPaymentRequestEmailHtml({
             <img src="https://cargobill.co/logo-horizontal.png" alt="Company Logo">           
           </div>
           
-          <h2>You have a new payment request!</h2>
+          <h2>${
+            type === "recipient"
+              ? "You have a new payment request!"
+              : "Payment request sent successfully!"
+          }</h2>
           
           <div class="info-box">
             <div class="amount">${formatCurrency(paymentRequest.amount)}</div>
