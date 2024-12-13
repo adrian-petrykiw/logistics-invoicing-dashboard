@@ -1,3 +1,4 @@
+import * as multisig from "@sqds/multisig";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -10,7 +11,6 @@ import Link from "next/link";
 import { FileIcon, Loader2 } from "lucide-react";
 import { usePaymentRequest } from "@/features/payment-requests/hooks/usePaymentRequest";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { toast } from "react-hot-toast";
 import {
   Dialog,
@@ -41,21 +41,29 @@ import {
   PublicKey,
   Transaction,
   TransactionInstruction,
+  TransactionMessage,
 } from "@solana/web3.js";
-import { getMultisigPda, getVaultPda } from "@sqds/multisig";
+import { getVaultPda } from "@sqds/multisig";
 import { initOnRamp, InitOnRampParams } from "@coinbase/cbpay-js";
 import { useCreditBalance } from "@/features/dashboard/hooks/useCreditBalance";
 import { useVendorInfo } from "@/hooks/useVendorInfo";
 import { useOrganization } from "@/features/auth/hooks/useOrganization";
-import { squadsService } from "@/services/squads";
 import { solanaService } from "@/services/solana";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   USDC_MINT,
 } from "@/utils/constants";
-import { CreateTransactionDTO } from "@/types/transaction";
 import { createCipheriv, createHash, randomBytes } from "crypto";
+import {
+  createTransferInstruction,
+  getAssociatedTokenAddress,
+} from "@solana/spl-token";
+import {
+  getAccountsForExecuteCore,
+  transactionMessageToVaultMessage,
+  vaultTransactionExecuteSync,
+} from "@/utils/squads";
 
 const organizationSchema = z.object({
   ownerName: z.string().min(1, "Owner name is required"),
@@ -212,181 +220,313 @@ export default function PaymentRequestPage() {
         index: 0,
       });
 
-      // Create and encrypt payment data
-      const paymentData = {
-        invoice: {
-          number: paymentRequest.invoices[0].number,
-          amount: paymentRequest.amount,
-        },
-        timestamp: Date.now(),
-        paymentMethod: "account_credit",
-      };
-
-      const encryptionKey = randomBytes(32);
-      const iv = randomBytes(16);
-      const cipher = createCipheriv("aes-256-cbc", encryptionKey, iv);
-      let encryptedData = cipher.update(
-        JSON.stringify(paymentData),
-        "utf8",
-        "hex"
-      );
-      encryptedData += cipher.final("hex");
-
-      const paymentHash = createHash("sha256")
-        .update(JSON.stringify(paymentData))
-        .digest("hex");
-
-      // Create memo instruction with payment data
-      const memoData = {
-        d: iv.toString("hex") + ":" + encryptedData,
-        h: paymentHash,
-        v: "1.0",
-        i: paymentRequest.invoices[0].number,
-      };
-
-      const memoIx = new TransactionInstruction({
-        keys: [],
-        programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
-        data: Buffer.from(JSON.stringify(memoData)),
-      });
-
-      // Create the vault transfer
-      const { createIx, transactionIndex, transferIx } =
-        await squadsService.createVaultTransfer({
-          amount: paymentRequest.amount,
-          senderMultisigPda,
-          senderVaultPda,
-          recipientVaultPda: new PublicKey(
-            paymentRequest.recipient.vault_address
-          ),
-          creator: publicKey,
+      // Get sender multisig info with error handling
+      let senderMultisigInfo;
+      try {
+        senderMultisigInfo =
+          await multisig.accounts.Multisig.fromAccountAddress(
+            heliusConnection,
+            senderMultisigPda
+          );
+        console.log("Found sender's multisig:", {
+          threshold: senderMultisigInfo.threshold.toString(),
+          transactionIndex: senderMultisigInfo.transactionIndex.toString(),
         });
-
-      // Create and send the create transaction
-      const createTx = await solanaService.addPriorityFee(
-        new Transaction().add(createIx),
-        publicKey
-      );
-      createTx.recentBlockhash = (
-        await heliusConnection.getLatestBlockhash()
-      ).blockhash;
-      createTx.feePayer = publicKey;
-
-      const signedCreateTx = await signTransaction(createTx);
-      const createTxSignature = await heliusConnection.sendRawTransaction(
-        signedCreateTx.serialize(),
-        { skipPreflight: true }
-      );
-
-      await solanaService.confirmTransactionWithRetry(createTxSignature);
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-
-      // Propose the transaction
-      const proposeIx = await squadsService.proposeVaultTransaction(
-        senderMultisigPda,
-        transactionIndex,
-        publicKey
-      );
-
-      const proposeTx = await solanaService.addPriorityFee(
-        new Transaction().add(proposeIx),
-        publicKey
-      );
-      proposeTx.recentBlockhash = (
-        await heliusConnection.getLatestBlockhash()
-      ).blockhash;
-      proposeTx.feePayer = publicKey;
-
-      const signedProposeTx = await signTransaction(proposeTx);
-      const proposeTxSignature = await heliusConnection.sendRawTransaction(
-        signedProposeTx.serialize()
-      );
-
-      await solanaService.confirmTransactionWithRetry(proposeTxSignature);
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-
-      // Approve and execute the transaction
-      const approveIx = await squadsService.approveVaultTransaction(
-        senderMultisigPda,
-        transactionIndex,
-        publicKey
-      );
-
-      const { instruction: executeIx } =
-        await squadsService.executeVaultTransaction({
-          senderMultisigPda,
-          senderVaultPda,
-          transactionIndex,
-          member: publicKey,
-          ixs: [transferIx, memoIx],
-        });
-
-      // Combine approve and execute
-      const executeTx = await solanaService.addPriorityFee(
-        new Transaction().add(approveIx, executeIx),
-        publicKey
-      );
-      executeTx.recentBlockhash = (
-        await heliusConnection.getLatestBlockhash()
-      ).blockhash;
-      executeTx.feePayer = publicKey;
-
-      const signedExecuteTx = await signTransaction(executeTx);
-      const executeTxSignature = await heliusConnection.sendRawTransaction(
-        signedExecuteTx.serialize(),
-        { skipPreflight: true }
-      );
-
-      const status = await solanaService.confirmTransactionWithRetry(
-        executeTxSignature
-      );
-
-      // Complete the payment request with the new endpoint
-      const response = await fetch("/api/payment-requests/complete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(user
-            ? {
-                "x-user-email": user.email,
-                "x-wallet-address": user.walletAddress,
-                "x-user-info": JSON.stringify(user.userInfo),
-              }
-            : {}),
-        },
-        body: JSON.stringify({
-          id: paymentRequest.id,
-          signature: executeTxSignature,
-          proof_data: {
-            encryption_keys: {
-              [paymentRequest.invoices[0].number]:
-                encryptionKey.toString("hex"),
-            },
-            payment_hashes: {
-              [paymentRequest.invoices[0].number]: paymentHash,
-            },
-          },
-          sender: {
-            multisig_address: senderMultisigPda.toString(),
-            vault_address: senderVaultPda.toString(),
-            wallet_address: publicKey.toString(),
-          },
-          recipient: {
-            multisig_address: paymentRequest.recipient.multisig_address,
-            vault_address: paymentRequest.recipient.vault_address,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
+      } catch (err) {
+        console.error("Failed to fetch multisig account:", err);
         throw new Error(
-          errorData.error?.error || "Failed to complete payment request"
+          "Unable to access your organization's payment account. Please try again."
         );
       }
 
-      toast.success("Payment processed successfully!");
-      router.push("/transactions");
+      // Get USDC ATAs with error handling
+      let senderUsdcAta, recipientUsdcAta;
+      try {
+        senderUsdcAta = await getAssociatedTokenAddress(
+          USDC_MINT,
+          senderVaultPda,
+          true,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+
+        const recipientVaultPda = new PublicKey(
+          paymentRequest.recipient.vault_address
+        );
+        recipientUsdcAta = await getAssociatedTokenAddress(
+          USDC_MINT,
+          recipientVaultPda,
+          true,
+          TOKEN_PROGRAM_ID,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+      } catch (err) {
+        console.error("Failed to derive token accounts:", err);
+        throw new Error("Unable to set up payment accounts. Please try again.");
+      }
+
+      // Create instructions and encrypt data with error handling
+      let transferIx, memoIx, encryptionKey, paymentHash;
+      try {
+        transferIx = createTransferInstruction(
+          senderUsdcAta,
+          recipientUsdcAta,
+          senderVaultPda,
+          BigInt(Math.round(paymentRequest.amount * 1e6))
+        );
+
+        const paymentData = {
+          invoice: {
+            number: paymentRequest.invoices[0].number,
+            amount: paymentRequest.amount,
+          },
+          timestamp: Date.now(),
+          paymentMethod: "account_credit",
+        };
+
+        encryptionKey = randomBytes(32);
+        const iv = randomBytes(16);
+        const cipher = createCipheriv("aes-256-cbc", encryptionKey, iv);
+        let encryptedData = cipher.update(
+          JSON.stringify(paymentData),
+          "utf8",
+          "hex"
+        );
+        encryptedData += cipher.final("hex");
+
+        paymentHash = createHash("sha256")
+          .update(JSON.stringify(paymentData))
+          .digest("hex");
+
+        const memoData = {
+          d: iv.toString("hex") + ":" + encryptedData,
+          h: paymentHash,
+          v: "1.0",
+          i: paymentRequest.invoices[0].number,
+        };
+
+        memoIx = new TransactionInstruction({
+          keys: [],
+          programId: new PublicKey(
+            "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+          ),
+          data: Buffer.from(JSON.stringify(memoData)),
+        });
+      } catch (err) {
+        console.error("Failed to prepare transaction:", err);
+        throw new Error("Error preparing payment data. Please try again.");
+      }
+
+      // Create transaction message
+      console.log("Creating transaction message...");
+      const transferMessage = new TransactionMessage({
+        payerKey: senderVaultPda,
+        recentBlockhash: (await heliusConnection.getLatestBlockhash())
+          .blockhash,
+        instructions: [transferIx, memoIx],
+      });
+
+      // Get next transaction index and create transaction
+      const newTransactionIndex = BigInt(
+        Number(senderMultisigInfo.transactionIndex) + 1
+      );
+      console.log("Using transaction index:", newTransactionIndex.toString());
+
+      const createIx = await multisig.instructions.vaultTransactionCreate({
+        multisigPda: senderMultisigPda,
+        transactionIndex: newTransactionIndex,
+        creator: publicKey,
+        vaultIndex: 0,
+        ephemeralSigners: 0,
+        transactionMessage: transferMessage,
+        memo: `Payment Request Transfer`,
+      });
+
+      // Send create transaction with retries
+      console.log("Sending create transaction...");
+      let createTxSignature;
+      try {
+        const createTx = await solanaService.addPriorityFee(
+          new Transaction().add(createIx),
+          publicKey
+        );
+        createTx.recentBlockhash = (
+          await heliusConnection.getLatestBlockhash()
+        ).blockhash;
+        createTx.feePayer = publicKey;
+
+        const signedCreateTx = await signTransaction(createTx);
+        createTxSignature = await heliusConnection.sendRawTransaction(
+          signedCreateTx.serialize(),
+          {
+            skipPreflight: true,
+            maxRetries: 3,
+            preflightCommitment: "confirmed",
+          }
+        );
+
+        const createStatus = await solanaService.confirmTransactionWithRetry(
+          createTxSignature,
+          "confirmed",
+          10, // Number of retries
+          60000 // Timeout in milliseconds
+        );
+
+        if (!createStatus || createStatus.err) {
+          throw new Error(
+            `Transaction failed: ${
+              createStatus ? JSON.stringify(createStatus.err) : "Timeout"
+            }`
+          );
+        }
+      } catch (err) {
+        console.error("Create transaction failed:", err);
+        throw new Error("Failed to create payment. Please try again.");
+      }
+
+      // Wait between transactions
+      console.log("Waiting for transaction to settle...");
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+
+      // Prepare execution transaction
+      console.log("Preparing execution transaction...");
+      try {
+        const [transactionPda] = multisig.getTransactionPda({
+          multisigPda: senderMultisigPda,
+          index: newTransactionIndex,
+        });
+
+        const compiledMessage = transactionMessageToVaultMessage({
+          message: transferMessage,
+          addressLookupTableAccounts: [],
+          vaultPda: senderVaultPda,
+        });
+
+        const { accountMetas } = await getAccountsForExecuteCore({
+          connection: heliusConnection,
+          multisigPda: senderMultisigPda,
+          message: compiledMessage,
+          ephemeralSignerBumps: [0],
+          vaultIndex: 0,
+          transactionPda,
+          programId: multisig.PROGRAM_ID,
+        });
+
+        // Create proposal, approve, and execute instructions
+        const proposeIx = multisig.instructions.proposalCreate({
+          multisigPda: senderMultisigPda,
+          transactionIndex: newTransactionIndex,
+          creator: publicKey,
+        });
+
+        const approveIx = multisig.instructions.proposalApprove({
+          multisigPda: senderMultisigPda,
+          transactionIndex: newTransactionIndex,
+          member: publicKey,
+        });
+
+        const { instruction: executeIx } = vaultTransactionExecuteSync({
+          multisigPda: senderMultisigPda,
+          transactionIndex: newTransactionIndex,
+          member: publicKey,
+          accountsForExecute: accountMetas,
+          programId: multisig.PROGRAM_ID,
+        });
+
+        // Send execution transaction with retries
+        console.log("Sending execution transaction...");
+        const executeTx = await solanaService.addPriorityFee(
+          new Transaction().add(proposeIx, approveIx, executeIx),
+          publicKey
+        );
+        executeTx.recentBlockhash = (
+          await heliusConnection.getLatestBlockhash()
+        ).blockhash;
+        executeTx.feePayer = publicKey;
+
+        const signedExecuteTx = await signTransaction(executeTx);
+        const executeTxSignature = await heliusConnection.sendRawTransaction(
+          signedExecuteTx.serialize(),
+          {
+            skipPreflight: true,
+            maxRetries: 3,
+            preflightCommitment: "confirmed",
+          }
+        );
+
+        const executeStatus = await solanaService.confirmTransactionWithRetry(
+          executeTxSignature,
+          "confirmed",
+          10,
+          60000
+        );
+
+        if (!executeStatus || executeStatus.err) {
+          throw new Error(
+            `Payment execution failed: ${
+              executeStatus ? JSON.stringify(executeStatus.err) : "Timeout"
+            }`
+          );
+        }
+
+        // Complete payment request
+        console.log("Completing payment request...");
+        try {
+          const response = await fetch("/api/payment-requests/complete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(user
+                ? {
+                    "x-user-email": user.email,
+                    "x-wallet-address": user.walletAddress,
+                    "x-user-info": JSON.stringify(user.userInfo),
+                  }
+                : {}),
+            },
+            body: JSON.stringify({
+              id: paymentRequest.id,
+              signature: executeTxSignature,
+              proof_data: {
+                encryption_keys: {
+                  [paymentRequest.invoices[0].number]:
+                    encryptionKey.toString("hex"),
+                },
+                payment_hashes: {
+                  [paymentRequest.invoices[0].number]: paymentHash,
+                },
+              },
+              sender: {
+                multisig_address: senderMultisigPda.toString(),
+                vault_address: senderVaultPda.toString(),
+                wallet_address: publicKey.toString(),
+              },
+              recipient: {
+                multisig_address: paymentRequest.recipient.multisig_address,
+                vault_address: paymentRequest.recipient.vault_address,
+              },
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(
+              errorData.error?.error || "Failed to complete payment request"
+            );
+          }
+
+          toast.success("Payment processed successfully!");
+          router.push("/transactions");
+        } catch (err) {
+          console.error("Failed to record payment:", err);
+          toast.error(
+            "Payment processed but failed to record. Please contact support."
+          );
+        }
+      } catch (err) {
+        console.error("Execution error:", err);
+        throw new Error("Payment execution failed. Please try again.");
+      }
     } catch (error) {
       console.error("Payment error:", error);
       toast.error(error instanceof Error ? error.message : "Payment failed");
@@ -394,6 +534,218 @@ export default function PaymentRequestPage() {
       setProcessingPayment(false);
     }
   };
+  // const handlePayment = async () => {
+  //   if (
+  //     !publicKey ||
+  //     !paymentRequest ||
+  //     !creditBalance ||
+  //     creditBalance < paymentRequest.amount ||
+  //     !signTransaction
+  //   ) {
+  //     toast.error("Invalid payment conditions");
+  //     return;
+  //   }
+
+  //   if (
+  //     !paymentRequest.recipient.vault_address ||
+  //     paymentRequest.recipient.vault_address === "pending"
+  //   ) {
+  //     toast.error("Recipient vault address is not valid");
+  //     return;
+  //   }
+
+  //   setProcessingPayment(true);
+
+  //   try {
+  //     // Get organization's multisig and vault addresses
+  //     const senderMultisigPda = new PublicKey(organization?.multisig_wallet!);
+  //     const [senderVaultPda] = getVaultPda({
+  //       multisigPda: senderMultisigPda,
+  //       index: 0,
+  //     });
+
+  //     // Create and encrypt payment data
+  //     const paymentData = {
+  //       invoice: {
+  //         number: paymentRequest.invoices[0].number,
+  //         amount: paymentRequest.amount,
+  //       },
+  //       timestamp: Date.now(),
+  //       paymentMethod: "account_credit",
+  //     };
+
+  //     const encryptionKey = randomBytes(32);
+  //     const iv = randomBytes(16);
+  //     const cipher = createCipheriv("aes-256-cbc", encryptionKey, iv);
+  //     let encryptedData = cipher.update(
+  //       JSON.stringify(paymentData),
+  //       "utf8",
+  //       "hex"
+  //     );
+  //     encryptedData += cipher.final("hex");
+
+  //     const paymentHash = createHash("sha256")
+  //       .update(JSON.stringify(paymentData))
+  //       .digest("hex");
+
+  //     // Create memo instruction with payment data
+  //     const memoData = {
+  //       d: iv.toString("hex") + ":" + encryptedData,
+  //       h: paymentHash,
+  //       v: "1.0",
+  //       i: paymentRequest.invoices[0].number,
+  //     };
+
+  //     const memoIx = new TransactionInstruction({
+  //       keys: [],
+  //       programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
+  //       data: Buffer.from(JSON.stringify(memoData)),
+  //     });
+
+  //     // Create the vault transfer
+  //     const { createIx, transactionIndex, transferIx } =
+  //       await squadsService.createVaultTransfer({
+  //         amount: paymentRequest.amount,
+  //         senderMultisigPda,
+  //         senderVaultPda,
+  //         recipientVaultPda: new PublicKey(
+  //           paymentRequest.recipient.vault_address
+  //         ),
+  //         creator: publicKey,
+  //       });
+
+  //     // Create and send the create transaction
+  //     const createTx = await solanaService.addPriorityFee(
+  //       new Transaction().add(createIx),
+  //       publicKey
+  //     );
+  //     createTx.recentBlockhash = (
+  //       await heliusConnection.getLatestBlockhash()
+  //     ).blockhash;
+  //     createTx.feePayer = publicKey;
+
+  //     const signedCreateTx = await signTransaction(createTx);
+  //     const createTxSignature = await heliusConnection.sendRawTransaction(
+  //       signedCreateTx.serialize(),
+  //       { skipPreflight: true }
+  //     );
+
+  //     await solanaService.confirmTransactionWithRetry(createTxSignature);
+  //     await new Promise((resolve) => setTimeout(resolve, 5000));
+
+  //     // Propose the transaction
+  //     const proposeIx = await squadsService.proposeVaultTransaction(
+  //       senderMultisigPda,
+  //       transactionIndex,
+  //       publicKey
+  //     );
+
+  //     const proposeTx = await solanaService.addPriorityFee(
+  //       new Transaction().add(proposeIx),
+  //       publicKey
+  //     );
+  //     proposeTx.recentBlockhash = (
+  //       await heliusConnection.getLatestBlockhash()
+  //     ).blockhash;
+  //     proposeTx.feePayer = publicKey;
+
+  //     const signedProposeTx = await signTransaction(proposeTx);
+  //     const proposeTxSignature = await heliusConnection.sendRawTransaction(
+  //       signedProposeTx.serialize()
+  //     );
+
+  //     await solanaService.confirmTransactionWithRetry(proposeTxSignature);
+  //     await new Promise((resolve) => setTimeout(resolve, 5000));
+
+  //     // Approve and execute the transaction
+  //     const approveIx = await squadsService.approveVaultTransaction(
+  //       senderMultisigPda,
+  //       transactionIndex,
+  //       publicKey
+  //     );
+
+  //     const { instruction: executeIx } =
+  //       await squadsService.executeVaultTransaction({
+  //         senderMultisigPda,
+  //         senderVaultPda,
+  //         transactionIndex,
+  //         member: publicKey,
+  //         ixs: [transferIx, memoIx],
+  //       });
+
+  //     // Combine approve and execute
+  //     const executeTx = await solanaService.addPriorityFee(
+  //       new Transaction().add(approveIx, executeIx),
+  //       publicKey
+  //     );
+  //     executeTx.recentBlockhash = (
+  //       await heliusConnection.getLatestBlockhash()
+  //     ).blockhash;
+  //     executeTx.feePayer = publicKey;
+
+  //     const signedExecuteTx = await signTransaction(executeTx);
+  //     const executeTxSignature = await heliusConnection.sendRawTransaction(
+  //       signedExecuteTx.serialize(),
+  //       { skipPreflight: true }
+  //     );
+
+  //     const status = await solanaService.confirmTransactionWithRetry(
+  //       executeTxSignature
+  //     );
+
+  //     // Complete the payment request with the new endpoint
+  //     const response = await fetch("/api/payment-requests/complete", {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         ...(user
+  //           ? {
+  //               "x-user-email": user.email,
+  //               "x-wallet-address": user.walletAddress,
+  //               "x-user-info": JSON.stringify(user.userInfo),
+  //             }
+  //           : {}),
+  //       },
+  //       body: JSON.stringify({
+  //         id: paymentRequest.id,
+  //         signature: executeTxSignature,
+  //         proof_data: {
+  //           encryption_keys: {
+  //             [paymentRequest.invoices[0].number]:
+  //               encryptionKey.toString("hex"),
+  //           },
+  //           payment_hashes: {
+  //             [paymentRequest.invoices[0].number]: paymentHash,
+  //           },
+  //         },
+  //         sender: {
+  //           multisig_address: senderMultisigPda.toString(),
+  //           vault_address: senderVaultPda.toString(),
+  //           wallet_address: publicKey.toString(),
+  //         },
+  //         recipient: {
+  //           multisig_address: paymentRequest.recipient.multisig_address,
+  //           vault_address: paymentRequest.recipient.vault_address,
+  //         },
+  //       }),
+  //     });
+
+  //     if (!response.ok) {
+  //       const errorData = await response.json();
+  //       throw new Error(
+  //         errorData.error?.error || "Failed to complete payment request"
+  //       );
+  //     }
+
+  //     toast.success("Payment processed successfully!");
+  //     router.push("/transactions");
+  //   } catch (error) {
+  //     console.error("Payment error:", error);
+  //     toast.error(error instanceof Error ? error.message : "Payment failed");
+  //   } finally {
+  //     setProcessingPayment(false);
+  //   }
+  // };
 
   const handleOnrampPayment = async () => {
     if (!publicKey || !paymentRequest || !recipientOrgInfo) {
