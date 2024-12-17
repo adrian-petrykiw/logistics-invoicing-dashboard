@@ -43,11 +43,10 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className=" mx-auto px-14 flex flex-col h-[90vh] items-center justify-center">
         <div className="max-w-3xl mx-auto text-center">
-          <h1 className="text-4xl font-bold text-tertiary mb-6">
-            Logistics Payments Made Better
-          </h1>
+          <h1 className="text-4xl font-bold text-tertiary mb-6"></h1>
           <p className="text-lg text-quaternary">
-            Send & receive supply payments in seconds anywhere in the world
+            Send & receive supply chain payments in seconds anywhere in the
+            world
           </p>
         </div>
 
@@ -60,8 +59,8 @@ export default function LandingPage() {
           />
           <FeatureCard
             icon={<FiDollarSign className="w-8 h-8" />}
-            title="Cheap"
-            description="Simple $5 fee on payments over $10,000, flat 0.5% under!"
+            title="Low Fee"
+            description="Simple $12 fee on payments over $10,000, flat $8 under!"
           />
           <FeatureCard
             icon={<FiLock className="w-8 h-8" />}
