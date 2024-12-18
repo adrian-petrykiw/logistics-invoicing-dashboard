@@ -43,7 +43,9 @@ export default function LandingPage() {
       {/* Hero Section */}
       <main className=" mx-auto px-14 flex flex-col h-[90vh] items-center justify-center">
         <div className="max-w-3xl mx-auto text-center">
-          <h1 className="text-4xl font-bold text-tertiary mb-6"></h1>
+          <h1 className="text-4xl font-bold text-tertiary mb-6">
+            Logistics Payments Made Better
+          </h1>
           <p className="text-lg text-quaternary">
             Send & receive supply chain payments in seconds anywhere in the
             world
