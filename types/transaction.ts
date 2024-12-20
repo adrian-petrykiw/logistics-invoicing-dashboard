@@ -4,34 +4,26 @@ export interface TransactionParty {
   wallet_address?: string; // Optional for recipient
 }
 
-export interface InvoiceProofData {
-  invoice_number: string;
-  encryption_key: string;
-  payment_hash: string;
-}
-
 export interface ProofData {
-  encryption_keys: Record<string, string>; // invoice_number -> encryption_key
-  payment_hashes: Record<string, string>; // invoice_number -> payment_hash
+  encryption_keys: Record<string, string>;
+  payment_hashes: Record<string, string>;
 }
 
 export interface Invoice {
   number: string;
   amount: number;
-  proof?: InvoiceProofData; // For internal use during transaction creation
+  files?: string[]; // For storing uploaded file URLs
 }
 
 export type TransactionStatus =
-  | "draft" // Payment request created but not activated
-  | "open" // Payment request active, ready for payment
-  | "pending" // Payment requested, not yet paid
-  | "processing" // Payment is being processed
-  | "confirmed" // Transaction confirmed on chain
-  | "finalized" // Transaction finalized on chain
-  | "failed" // Transaction failed
-  | "expired"; // Payment request expired
+  | "draft"
+  | "open"
+  | "pending"
+  | "processing"
+  | "confirmed"
+  | "failed"
+  | "expired";
 
-// Add supported payment methods
 export type PaymentMethod =
   | "wire"
   | "ach"
@@ -58,14 +50,11 @@ export interface TransactionRecord {
   restricted_payment_methods?: PaymentMethod[];
   metadata?: {
     payment_request?: {
-      requester_info?: {
-        name: string;
-        email: string;
-        company: string;
-        address?: string;
-        phone?: string;
-      };
       notes?: string;
+      creator_email?: string;
+      creator_wallet_address?: string;
+      creator_organization_id?: string;
+      creator_organization_name?: string;
       custom_fields?: Record<string, any>;
     };
   };

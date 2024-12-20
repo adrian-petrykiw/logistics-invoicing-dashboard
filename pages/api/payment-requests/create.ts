@@ -1,6 +1,7 @@
 import { NextApiResponse } from "next";
 import { withAuth, AuthedRequest } from "@/pages/api/_lib/auth";
 import { ApiResponse, TransactionRecord } from "@/types/transaction";
+import { mapTransactionToEmailTemplate } from "@/utils/email-mapper";
 import { supabaseAdmin } from "../_lib/supabase";
 import { emailService } from "./email-service";
 import { createPaymentRequestEmailHtml } from "./email-templates";
@@ -183,6 +184,7 @@ async function handler(
             creator_organization_id: input.receiving_organization_id,
             creator_organization_name:
               currentRecipientOrg?.business_details.companyName ||
+              input.sending_organization.name ||
               "Organization name not provided",
           },
         },
@@ -199,13 +201,15 @@ async function handler(
 
     // Handle email notifications
     try {
+      const emailData = mapTransactionToEmailTemplate(transaction);
+
       // Send email to recipient organization (future sender)
       await emailService.sendEmail(
         recipientEmail,
         "New Payment Request",
         createPaymentRequestEmailHtml({
           type: "recipient",
-          paymentRequest: transaction,
+          paymentRequest: emailData,
         })
       );
 
@@ -215,12 +219,14 @@ async function handler(
         "Payment Request Created",
         createPaymentRequestEmailHtml({
           type: "requester",
-          paymentRequest: transaction,
+          paymentRequest: emailData,
         })
       );
     } catch (emailError: any) {
       console.error("Failed to send email notifications:", emailError);
-      throw Error("Failed to send email notifications: ", emailError);
+      throw new Error(
+        `Failed to send email notifications: ${emailError.message}`
+      );
     }
 
     return res.status(201).json({

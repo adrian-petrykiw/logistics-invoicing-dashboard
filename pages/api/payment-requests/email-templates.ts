@@ -1,22 +1,4 @@
-interface PaymentRequestEmailProps {
-  type: "requester" | "recipient";
-  paymentRequest: {
-    id: string;
-    amount: number;
-    due_date: string;
-    metadata?: {
-      payment_request?: {
-        creator_email?: string;
-        notes?: string;
-        organization_name?: string;
-      };
-    };
-    invoices: Array<{
-      number: string;
-      amount: number;
-    }>;
-  };
-}
+import { PaymentRequestEmailProps } from "@/types/email";
 
 export function createPaymentRequestEmailHtml({
   type,
@@ -167,7 +149,8 @@ export function createPaymentRequestEmailHtml({
                 type === "requester" ? "Recipient" : "Requester"
               }:</div>
               <div>${
-                paymentRequest.metadata?.payment_request?.organization_name ||
+                paymentRequest.metadata?.payment_request
+                  ?.creator_organization_name ||
                 "Organization name not provided"
               }</div>
               <div>${
