@@ -189,7 +189,7 @@ export default function SettingsPage() {
         {/* Organization */}
         <Card>
           {/* Inside your CardHeader in the Organization section */}
-          <CardHeader className="flex flex-row items-end justify-between">
+          <CardHeader className="flex flex-row items-center justify-between pb-0 mb-2">
             <CardTitle>Organization</CardTitle>
             <div className="flex items-center gap-2">
               {!organization && !orgLoading && (

@@ -164,17 +164,22 @@ export function OfframpModal({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button disabled={disabled || !connected || balance <= 0}>
-          Offramp Funds
-          <FiArrowUpRight></FiArrowUpRight>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="font-medium text-black hover:bg-transparent hover:text-error mr-[-4px] pr-0"
+          disabled={disabled || !connected || balance <= 0}
+        >
+          Withdraw Funds
+          <FiArrowUpRight className="ml-[-4px] mb-[1px]"></FiArrowUpRight>
         </Button>
       </DialogTrigger>
 
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Offramp Funds</DialogTitle>
+          <DialogTitle>Withdraw Funds</DialogTitle>
           <DialogDescription>
-            Convert your funds to fiat and withdraw them to your selected method
+            Convert your funds to fiat and offramp them to your selected method
           </DialogDescription>
         </DialogHeader>
 
