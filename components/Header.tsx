@@ -12,7 +12,7 @@ export function Header() {
   const router = useRouter();
 
   return (
-    <header className="bg-primary border-b border-secondary py-4">
+    <header className="bg-background border-b border-secondary py-4">
       <div className="container flex justify-between items-center">
         <Link
           href="/dashboard"

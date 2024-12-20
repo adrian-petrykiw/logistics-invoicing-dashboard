@@ -315,7 +315,7 @@ export default function SettingsPage() {
                               </Select>
                             </div>
                             <Button type="submit" className="w-full" disabled>
-                              COMING SOON
+                              Plan upgrade required
                             </Button>
                           </form>
                         </DialogContent>

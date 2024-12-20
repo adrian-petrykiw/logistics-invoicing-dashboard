@@ -55,7 +55,7 @@ function MyApp({ Component, pageProps }: AppProps) {
 
   if (!isMounted) {
     return (
-      <div className="min-h-screen bg-primary flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-tertiary">Initializing application...</div>
       </div>
     );

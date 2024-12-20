@@ -8,8 +8,23 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ChevronDown, Settings, LogOut, Store } from "lucide-react";
+import { ChevronDown, Settings, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
+
+const isUserCancellation = (error: any): boolean => {
+  if (!error) return false;
+
+  const errorMessage = error.message?.toLowerCase() || "";
+  const errorName = error.name || "";
+
+  return (
+    errorMessage.includes("cancel") ||
+    errorMessage.includes("user rejected") ||
+    errorName === "WalletConfigError" ||
+    // Add any other cancellation-related error patterns here
+    errorMessage.includes("user abort")
+  );
+};
 
 const ParticleButtonContent = () => {
   const { select, connecting, connected, wallet, disconnect } = useWallet();
@@ -20,18 +35,43 @@ const ParticleButtonContent = () => {
   const handleParticleConnect = useCallback(async () => {
     if (!connected && !connecting) {
       try {
-        // Add initialization check
         if (!window.particle?.auth) {
-          console.error("Particle auth not initialized");
+          console.warn("Particle auth not initialized");
           return;
         }
 
-        await disconnect();
-        await new Promise((resolve) => setTimeout(resolve, 500)); // Increase delay
-        await select("Particle" as WalletName);
+        // First disconnect any existing connection
+        try {
+          await disconnect();
+        } catch (disconnectError) {
+          console.warn("Disconnect error:", disconnectError);
+          // Continue anyway
+        }
+
+        // Add a small delay
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        try {
+          await select("Particle" as WalletName);
+        } catch (error: any) {
+          // Properly type and handle the error
+          if (isUserCancellation(error)) {
+            console.log("User cancelled wallet connection");
+            // Silently return without showing any error
+            return;
+          }
+
+          // For other errors, show a toast
+          console.error("Connection error:", error);
+          toast.error("Failed to connect wallet");
+          return;
+        }
       } catch (error) {
-        console.error("Connection error:", error);
-        toast.error("Connection error");
+        // This catch block handles any other unexpected errors
+        console.error("Unexpected error during wallet connection:", error);
+        if (!isUserCancellation(error)) {
+          toast.error("An unexpected error occurred");
+        }
       }
     }
   }, [connected, connecting, select, disconnect]);

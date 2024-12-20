@@ -4,9 +4,8 @@ import {
   WalletProvider,
 } from "@solana/wallet-adapter-react";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { clusterApiUrl } from "@solana/web3.js";
-import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import { ParticleAdapter } from "@solana/wallet-adapter-wallets";
+import { WalletError } from "@solana/wallet-adapter-base";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import toast from "react-hot-toast";
 
@@ -46,16 +45,22 @@ const WalletProviderComponent: FC<PropsWithChildren> = ({ children }) => {
     []
   );
 
+  const onError = (error: WalletError) => {
+    if (
+      error.message.toLowerCase().includes("cancel") ||
+      error.message.toLowerCase().includes("user rejected") ||
+      error.name === "WalletConfigError"
+    ) {
+      console.log("User cancelled wallet operation:", error.message);
+      return;
+    }
+    console.error("Wallet error:", error);
+    toast.error("Wallet error: Please try reconnecting");
+  };
+
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider
-        autoConnect={true}
-        wallets={wallets}
-        onError={(error) => {
-          console.error("Wallet error:", error);
-          toast.error("Wallet error: Please try reconnecting");
-        }}
-      >
+      <WalletProvider autoConnect={true} wallets={wallets} onError={onError}>
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

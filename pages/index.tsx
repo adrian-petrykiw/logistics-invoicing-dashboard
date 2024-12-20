@@ -53,7 +53,7 @@ export default function LandingPage() {
         </div>
 
         {/* Features */}
-        <div className="grid md:grid-cols-3 gap-12 mt-20">
+        <div className="grid md:grid-cols-3 gap-12 mt-24">
           <FeatureCard
             icon={<FiZap className="w-8 h-8" />}
             title="Fast"
@@ -85,7 +85,7 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <Card className="p-6 rounded-lg border border-secondary bg-primary justify-center">
+    <Card className="p-6 border justify-center">
       <div className="text-tertiary mb-4">{icon}</div>
       <h3 className="text-xl font-semibold text-tertiary mb-2">{title}</h3>
       <p className="text-quaternary">{description}</p>
