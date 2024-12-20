@@ -486,10 +486,10 @@ export function VendorRegistrationModal({
               <Input
                 name="amount"
                 type="number"
-                min="1"
+                min="10"
                 max="500"
                 step="0.01"
-                placeholder="Enter amount between $1-$500"
+                placeholder="Enter amount between $10-$500"
                 required
                 disabled={formDisabled}
               />
@@ -498,8 +498,9 @@ export function VendorRegistrationModal({
               <p>
                 <span className="font-bold">Notice: </span>
                 To register as a verified vendor, you must complete a USDC
-                payment between $1-$500 with your debit/credit card. This amount
-                will be added to your credit balance.
+                payment to add funds to your account between $10-$500. This
+                amount minus $10 for initial transaction fees will be added to
+                your account credit balance.
               </p>
             </div>
 

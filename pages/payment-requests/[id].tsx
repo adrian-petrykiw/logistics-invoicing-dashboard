@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import Link from "next/link";
-import { FileIcon, Loader2 } from "lucide-react";
+import { Check, FileIcon, Loader2 } from "lucide-react";
 import { usePaymentRequest } from "@/features/payment-requests/hooks/usePaymentRequest";
 import { Input } from "@/components/ui/input";
 import { toast } from "react-hot-toast";
@@ -94,6 +94,21 @@ type OrganizationFormData = z.infer<typeof organizationSchema>;
 type VerificationFormData = z.infer<typeof verificationSchema>;
 type PaymentFormData = z.infer<typeof paymentSchema>;
 
+type ProcessingStep =
+  | "awaiting_funds"
+  | "encrypting"
+  | "creating"
+  | "confirming"
+  | "confirmed";
+
+const stepConfig: Record<ProcessingStep, string> = {
+  awaiting_funds: "Awaiting Registration Funds",
+  encrypting: "Encrypting Payment Data",
+  creating: "Creating Transaction",
+  confirming: "Confirming Transaction",
+  confirmed: "Payment Confirmed",
+};
+
 const heliusConnection = new Connection(
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL!,
   "confirmed"
@@ -114,6 +129,7 @@ export default function PaymentRequestPage() {
   const [verificationComplete, setVerificationComplete] = useState(false);
   const [showOrgRegistration, setShowOrgRegistration] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
+  const [status, setStatus] = useState<ProcessingStep | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<
     string | null
   >(null);
@@ -123,37 +139,16 @@ export default function PaymentRequestPage() {
     isLoading: paymentRequestLoading,
     error: paymentRequestError,
   } = usePaymentRequest(id as string);
-
-  if (!paymentRequestLoading && !paymentRequestError) {
-    console.log("++++++++++++++ PAYMENT REQUEST IS: ", paymentRequest);
-  }
-
-  // Fetch sender organization
-  console.log("sender pubkey is: ", publicKey?.toBase58());
   const { organization: senderOrganization, isLoading: senderOrgLoading } =
     useOrganization(publicKey?.toBase58() || "");
-  console.log("sender org is: ", senderOrganization);
-
-  // Fetch sender organization details
-  console.log("Sender org id is: ", paymentRequest?.sender?.organization?.id);
   const { data: senderOrgInfo, isLoading: senderOrgInfoLoading } =
     useVendorInfo(paymentRequest?.sender?.organization?.id || null);
-  console.log("senderOrgInfo is: ", JSON.stringify(senderOrgInfo));
-
-  // Fetch recipient organization details
-  console.log(
-    "Recipient org id is: ",
-    paymentRequest?.recipient?.organization?.id
-  );
   const { data: recipientOrgInfo, isLoading: recipientOrgInfoLoading } =
     useVendorInfo(paymentRequest?.recipient?.organization?.id || null);
-  console.log("recipientOrgInfo is: ", JSON.stringify(recipientOrgInfo));
 
-  // Get credit balance if organization exists and has a multisig
   const multisigPda = senderOrganization?.multisig_wallet
     ? new PublicKey(senderOrganization.multisig_wallet)
     : null;
-
   const { data: creditBalance, isLoading: balanceLoading } =
     useCreditBalance(multisigPda);
 
@@ -164,7 +159,6 @@ export default function PaymentRequestPage() {
     senderOrgInfoLoading ||
     balanceLoading;
 
-  // Organization registration form
   const orgForm = useForm<OrganizationFormData>({
     resolver: zodResolver(organizationSchema),
     defaultValues: {
@@ -175,17 +169,14 @@ export default function PaymentRequestPage() {
     },
   });
 
-  // Verification form
   const verificationForm = useForm<VerificationFormData>({
     resolver: zodResolver(verificationSchema),
   });
 
-  // Payment form
   const paymentForm = useForm<PaymentFormData>({
     resolver: zodResolver(paymentSchema),
   });
 
-  // Determine if organization needs registration
   const needsRegistration =
     (!isLoading && paymentRequest?.sender.multisig_address === "pending") ||
     paymentRequest?.sender.vault_address === "pending";
@@ -210,17 +201,16 @@ export default function PaymentRequestPage() {
       return;
     }
 
+    setStatus("encrypting");
     setProcessingPayment(true);
 
     try {
-      // Get organization's multisig and vault addresses
       const senderMultisigPda = new PublicKey(organization?.multisig_wallet!);
       const [senderVaultPda] = getVaultPda({
         multisigPda: senderMultisigPda,
         index: 0,
       });
 
-      // Get sender multisig info with error handling
       let senderMultisigInfo;
       try {
         senderMultisigInfo =
@@ -228,18 +218,14 @@ export default function PaymentRequestPage() {
             heliusConnection,
             senderMultisigPda
           );
-        console.log("Found sender's multisig:", {
-          threshold: senderMultisigInfo.threshold.toString(),
-          transactionIndex: senderMultisigInfo.transactionIndex.toString(),
-        });
       } catch (err) {
         console.error("Failed to fetch multisig account:", err);
-        throw new Error(
-          "Unable to access your organization's payment account. Please try again."
-        );
+        toast.error("Please try your payment again");
+        setStatus(null);
+        setProcessingPayment(false);
+        return;
       }
 
-      // Get USDC ATAs with error handling
       let senderUsdcAta, recipientUsdcAta;
       try {
         senderUsdcAta = await getAssociatedTokenAddress(
@@ -262,10 +248,14 @@ export default function PaymentRequestPage() {
         );
       } catch (err) {
         console.error("Failed to derive token accounts:", err);
-        throw new Error("Unable to set up payment accounts. Please try again.");
+        toast.error("Please try your payment again");
+        setStatus(null);
+        setProcessingPayment(false);
+        return;
       }
 
-      // Create instructions and encrypt data with error handling
+      setStatus("creating");
+
       let transferIx, memoIx, encryptionKey, paymentHash;
       try {
         transferIx = createTransferInstruction(
@@ -314,11 +304,12 @@ export default function PaymentRequestPage() {
         });
       } catch (err) {
         console.error("Failed to prepare transaction:", err);
-        throw new Error("Error preparing payment data. Please try again.");
+        toast.error("Please try your payment again");
+        setStatus(null);
+        setProcessingPayment(false);
+        return;
       }
 
-      // Create transaction message
-      console.log("Creating transaction message...");
       const transferMessage = new TransactionMessage({
         payerKey: senderVaultPda,
         recentBlockhash: (await heliusConnection.getLatestBlockhash())
@@ -326,11 +317,9 @@ export default function PaymentRequestPage() {
         instructions: [transferIx, memoIx],
       });
 
-      // Get next transaction index and create transaction
       const newTransactionIndex = BigInt(
         Number(senderMultisigInfo.transactionIndex) + 1
       );
-      console.log("Using transaction index:", newTransactionIndex.toString());
 
       const createIx = await multisig.instructions.vaultTransactionCreate({
         multisigPda: senderMultisigPda,
@@ -342,8 +331,6 @@ export default function PaymentRequestPage() {
         memo: `Payment Request Transfer`,
       });
 
-      // Send create transaction with retries
-      console.log("Sending create transaction...");
       let createTxSignature;
       try {
         const createTx = await solanaService.addPriorityFee(
@@ -355,7 +342,23 @@ export default function PaymentRequestPage() {
         ).blockhash;
         createTx.feePayer = publicKey;
 
-        const signedCreateTx = await signTransaction(createTx);
+        let signedCreateTx;
+        try {
+          signedCreateTx = await signTransaction(createTx);
+        } catch (err: any) {
+          if (
+            err.message?.toLowerCase().includes("cancel") ||
+            err.message?.toLowerCase().includes("reject")
+          ) {
+            console.log("Transaction signing cancelled:", err);
+            toast.error("Transaction cancelled");
+            setStatus(null);
+            setProcessingPayment(false);
+            return;
+          }
+          throw err;
+        }
+
         createTxSignature = await heliusConnection.sendRawTransaction(
           signedCreateTx.serialize(),
           {
@@ -368,28 +371,31 @@ export default function PaymentRequestPage() {
         const createStatus = await solanaService.confirmTransactionWithRetry(
           createTxSignature,
           "confirmed",
-          10, // Number of retries
-          60000 // Timeout in milliseconds
+          10,
+          60000
         );
 
         if (!createStatus || createStatus.err) {
-          throw new Error(
+          console.error(
             `Transaction failed: ${
               createStatus ? JSON.stringify(createStatus.err) : "Timeout"
             }`
           );
+          // Continue with the flow instead of throwing
+          return;
         }
       } catch (err) {
         console.error("Create transaction failed:", err);
-        throw new Error("Failed to create payment. Please try again.");
+        toast.error("Please try your payment again");
+        setStatus(null);
+        setProcessingPayment(false);
+        return;
       }
 
-      // Wait between transactions
-      console.log("Waiting for transaction to settle...");
       await new Promise((resolve) => setTimeout(resolve, 15000));
 
-      // Prepare execution transaction
-      console.log("Preparing execution transaction...");
+      setStatus("confirming");
+
       try {
         const [transactionPda] = multisig.getTransactionPda({
           multisigPda: senderMultisigPda,
@@ -412,7 +418,6 @@ export default function PaymentRequestPage() {
           programId: multisig.PROGRAM_ID,
         });
 
-        // Create proposal, approve, and execute instructions
         const proposeIx = multisig.instructions.proposalCreate({
           multisigPda: senderMultisigPda,
           transactionIndex: newTransactionIndex,
@@ -433,8 +438,6 @@ export default function PaymentRequestPage() {
           programId: multisig.PROGRAM_ID,
         });
 
-        // Send execution transaction with retries
-        console.log("Sending execution transaction...");
         const executeTx = await solanaService.addPriorityFee(
           new Transaction().add(proposeIx, approveIx, executeIx),
           publicKey
@@ -444,7 +447,23 @@ export default function PaymentRequestPage() {
         ).blockhash;
         executeTx.feePayer = publicKey;
 
-        const signedExecuteTx = await signTransaction(executeTx);
+        let signedExecuteTx;
+        try {
+          signedExecuteTx = await signTransaction(executeTx);
+        } catch (err: any) {
+          if (
+            err.message?.toLowerCase().includes("cancel") ||
+            err.message?.toLowerCase().includes("reject")
+          ) {
+            console.log("Transaction signing cancelled:", err);
+            toast.error("Transaction cancelled");
+            setStatus(null);
+            setProcessingPayment(false);
+            return;
+          }
+          throw err;
+        }
+
         const executeTxSignature = await heliusConnection.sendRawTransaction(
           signedExecuteTx.serialize(),
           {
@@ -462,75 +481,79 @@ export default function PaymentRequestPage() {
         );
 
         if (!executeStatus || executeStatus.err) {
-          throw new Error(
+          console.error(
             `Payment execution failed: ${
               executeStatus ? JSON.stringify(executeStatus.err) : "Timeout"
             }`
           );
+          toast.error("Please try your payment again");
+          setStatus(null);
+          setProcessingPayment(false);
+          return;
         }
 
-        // Complete payment request
-        console.log("Completing payment request...");
-        try {
-          const response = await fetch("/api/payment-requests/complete", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(user
-                ? {
-                    "x-user-email": user.email,
-                    "x-wallet-address": user.walletAddress,
-                    "x-user-info": JSON.stringify(user.userInfo),
-                  }
-                : {}),
+        const response = await fetch("/api/payment-requests/complete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(user
+              ? {
+                  "x-user-email": user.email,
+                  "x-wallet-address": user.walletAddress,
+                  "x-user-info": JSON.stringify(user.userInfo),
+                }
+              : {}),
+          },
+          body: JSON.stringify({
+            id: paymentRequest.id,
+            signature: executeTxSignature,
+            proof_data: {
+              encryption_keys: {
+                [paymentRequest.invoices[0].number]:
+                  encryptionKey.toString("hex"),
+              },
+              payment_hashes: {
+                [paymentRequest.invoices[0].number]: paymentHash,
+              },
             },
-            body: JSON.stringify({
-              id: paymentRequest.id,
-              signature: executeTxSignature,
-              proof_data: {
-                encryption_keys: {
-                  [paymentRequest.invoices[0].number]:
-                    encryptionKey.toString("hex"),
-                },
-                payment_hashes: {
-                  [paymentRequest.invoices[0].number]: paymentHash,
-                },
-              },
-              sender: {
-                multisig_address: senderMultisigPda.toString(),
-                vault_address: senderVaultPda.toString(),
-                wallet_address: publicKey.toString(),
-              },
-              recipient: {
-                multisig_address: paymentRequest.recipient.multisig_address,
-                vault_address: paymentRequest.recipient.vault_address,
-              },
-            }),
-          });
+            sender: {
+              multisig_address: senderMultisigPda.toString(),
+              vault_address: senderVaultPda.toString(),
+              wallet_address: publicKey.toString(),
+            },
+            recipient: {
+              multisig_address: paymentRequest.recipient.multisig_address,
+              vault_address: paymentRequest.recipient.vault_address,
+            },
+          }),
+        });
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(
-              errorData.error?.error || "Failed to complete payment request"
-            );
-          }
-
-          toast.success("Payment processed successfully!");
-          router.push("/transactions");
-        } catch (err) {
-          console.error("Failed to record payment:", err);
-          toast.error(
-            "Payment processed but failed to record. Please contact support."
-          );
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("API error:", errorData);
+          toast.error("Please try your payment again");
+          setStatus(null);
+          setProcessingPayment(false);
+          return;
         }
-      } catch (err) {
-        console.error("Execution error:", err);
-        throw new Error("Payment execution failed. Please try again.");
+
+        setStatus("confirmed");
+        toast.success("Payment processed successfully!");
+      } catch (error) {
+        console.error("Payment completion failed:", error);
+        toast.error("Please try your payment again");
+        setStatus(null);
+        setProcessingPayment(false);
       }
     } catch (error) {
-      console.error("Payment error:", error);
-      toast.error(error instanceof Error ? error.message : "Payment failed");
-    } finally {
+      console.error("Transaction failed:", error);
+      if (
+        error instanceof Error &&
+        !error.message.toLowerCase().includes("cancel")
+      ) {
+        toast.error("Please try your payment again");
+      }
+      setStatus(null);
       setProcessingPayment(false);
     }
   };
@@ -541,6 +564,7 @@ export default function PaymentRequestPage() {
       return;
     }
 
+    setStatus("awaiting_funds");
     setProcessingPayment(true);
 
     try {
@@ -548,7 +572,6 @@ export default function PaymentRequestPage() {
         .toBase58()
         .substring(0, 20)}_${Date.now()}`;
 
-      // Initialize vault with proper organization ID
       const vaultResult = await fetch("/api/vault/initialize", {
         method: "POST",
         headers: {
@@ -591,11 +614,13 @@ export default function PaymentRequestPage() {
           partnerUserId,
         },
         onSuccess: async () => {
+          setStatus("encrypting");
           await new Promise((resolve) => setTimeout(resolve, 5000));
           await handlePayment();
         },
         onExit: () => {
           setProcessingPayment(false);
+          setStatus(null);
           toast.error("Payment process was cancelled");
         },
         experienceLoggedIn: "popup",
@@ -617,14 +642,13 @@ export default function PaymentRequestPage() {
         error instanceof Error ? error.message : "Payment initialization failed"
       );
       setProcessingPayment(false);
+      setStatus(null);
     }
   };
 
-  // Handle email verification
   const handleSendVerification = async () => {
     try {
       const response = await fetch("/api/payment-requests/send-verification", {
-        // Fixed typo
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -662,11 +686,9 @@ export default function PaymentRequestPage() {
     }
   };
 
-  // Handle verification code submission
   const handleVerifyCode = async (data: VerificationFormData) => {
     try {
       const response = await fetch("/api/payment-requests/verify-code", {
-        // Updated path
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -702,7 +724,6 @@ export default function PaymentRequestPage() {
     }
   };
 
-  // Handle organization registration
   const handleOrgRegistration = async (data: OrganizationFormData) => {
     if (!publicKey || !senderOrganization?.id) {
       toast.error("Missing required organization information");
@@ -710,7 +731,6 @@ export default function PaymentRequestPage() {
     }
 
     try {
-      // Create multisig
       const multisigResult = await fetch("/api/create-multisig", {
         method: "POST",
         headers: {
@@ -732,7 +752,6 @@ export default function PaymentRequestPage() {
       if (!multisigResult.ok) throw new Error("Failed to create multisig");
       const { multisigPda } = await multisigResult.json();
 
-      // Update organization with null check
       const orgResult = await fetch("/api/update-organization", {
         method: "POST",
         headers: {
@@ -765,7 +784,6 @@ export default function PaymentRequestPage() {
     }
   };
 
-  // Loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-white">
@@ -788,7 +806,6 @@ export default function PaymentRequestPage() {
     );
   }
 
-  // Error state
   if (paymentRequestError || !paymentRequest) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1295,17 +1312,90 @@ export default function PaymentRequestPage() {
         </div>
       </div>
 
-      {/* Payment Processing Dialog */}
+      {/* Processing Dialog */}
       <Dialog
-        open={processingPayment}
-        onOpenChange={(open) => !open && setProcessingPayment(false)}
+        open={!!status}
+        onOpenChange={(open) => {
+          if (!open) {
+            setStatus(null);
+            setProcessingPayment(false);
+          }
+        }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Processing Payment</DialogTitle>
           </DialogHeader>
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div className="pt-2 space-y-3">
+            {/* Processing Steps */}
+            {(selectedPaymentMethod &&
+            selectedPaymentMethod !== "account_credit"
+              ? ([
+                  "awaiting_funds",
+                  "encrypting",
+                  "creating",
+                  "confirming",
+                ] as const)
+              : (["encrypting", "creating", "confirming"] as const)
+            ).map((step) => {
+              const steps =
+                selectedPaymentMethod &&
+                selectedPaymentMethod !== "account_credit"
+                  ? ["awaiting_funds", "encrypting", "creating", "confirming"]
+                  : ["encrypting", "creating", "confirming"];
+              const currentIndex = steps.indexOf(status || "");
+              const stepIndex = steps.indexOf(step);
+              const isCompleted = currentIndex > stepIndex;
+              const isCurrent = step === status;
+
+              return (
+                <Card key={step} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <p
+                      className={`text-sm font-medium ${
+                        isCurrent
+                          ? "text-tertiary"
+                          : isCompleted
+                          ? "text-gray-500"
+                          : "text-gray-400"
+                      }`}
+                    >
+                      {stepConfig[step]}
+                    </p>
+                    {isCurrent ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-gray-900" />
+                    ) : isCompleted ? (
+                      <Check className="h-5 w-5 text-green-500" />
+                    ) : null}
+                  </div>
+                </Card>
+              );
+            })}
+
+            {/* Success State */}
+            {status === "confirmed" && (
+              <Card className="p-4 bg-green-50 border-green-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-green-700 text-sm font-medium">
+                      Payment completed
+                    </span>
+                    <Check className="h-5 w-5 text-green-500" />
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setStatus(null);
+                      setProcessingPayment(false);
+                      router.push("/transactions");
+                    }}
+                    variant="outline"
+                    className="px-4 py-2 text-green-600 border-green-200 hover:bg-green-100"
+                  >
+                    View
+                  </Button>
+                </div>
+              </Card>
+            )}
           </div>
         </DialogContent>
       </Dialog>
