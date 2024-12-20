@@ -170,7 +170,7 @@ export function OfframpModal({
           className="font-medium text-black hover:bg-transparent hover:text-error mr-[-4px] pr-0"
           disabled={disabled || !connected || balance <= 0}
         >
-          Withdraw Funds
+          WITHDRAW FUNDS
           <FiArrowUpRight className="ml-[-4px] mb-[1px]"></FiArrowUpRight>
         </Button>
       </DialogTrigger>
@@ -194,7 +194,7 @@ export function OfframpModal({
           </div>
 
           <div className="space-y-2">
-            <Label>Withdraw Amount*</Label>
+            <Label>Amount*</Label>
             <Input
               name="amount"
               type="number"
