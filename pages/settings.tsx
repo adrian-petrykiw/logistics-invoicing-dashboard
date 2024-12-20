@@ -38,6 +38,8 @@ import { getMultisigPda, getVaultPda } from "@sqds/multisig";
 import Link from "next/link";
 import { VaultAddress } from "@/features/settings/components/VaultAddress";
 import { EditMemberModal } from "@/features/settings/components/EditMemberModal";
+import { OfframpModal } from "@/features/settings/components/OfframpModal";
+import { useMultisigVaultBalance } from "@/hooks/squads/useMultisigVaultBalance";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -80,6 +82,11 @@ export default function SettingsPage() {
     organization: !!organization,
     orgLoading,
   });
+
+  const { data: usdcBalance, isLoading: isBalanceLoading } =
+    useMultisigVaultBalance(
+      organization ? new PublicKey(organization.multisig_wallet) : null
+    );
 
   const handleRegistrationSuccess = () => {
     toast.success("Organization registered successfully!");
@@ -181,23 +188,35 @@ export default function SettingsPage() {
 
         {/* Organization */}
         <Card>
+          {/* Inside your CardHeader in the Organization section */}
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Organization</CardTitle>
-            {!organization && !orgLoading && (
-              <>
-                <Button onClick={() => setIsCreateOrgModalOpen(true)}>
-                  <FiPlus className="mr-2" /> Register Vendor
-                </Button>
-                <VendorRegistrationModal
-                  isOpen={isCreateOrgModalOpen}
-                  onOpenChange={setIsCreateOrgModalOpen}
-                  userInfo={userInfo}
-                  onSubmitSuccess={handleRegistrationSuccess}
-                  createMultisig={createMultisigMutation}
-                  createOrganization={createOrganization}
+            <div className="flex items-center gap-2">
+              {!organization && !orgLoading && (
+                <>
+                  <Button onClick={() => setIsCreateOrgModalOpen(true)}>
+                    <FiPlus className="mr-2" /> Register Vendor
+                  </Button>
+                  <VendorRegistrationModal
+                    isOpen={isCreateOrgModalOpen}
+                    onOpenChange={setIsCreateOrgModalOpen}
+                    userInfo={userInfo}
+                    onSubmitSuccess={handleRegistrationSuccess}
+                    createMultisig={createMultisigMutation}
+                    createOrganization={createOrganization}
+                  />
+                </>
+              )}
+              {organization && (
+                <OfframpModal
+                  multisigWallet={organization.multisig_wallet}
+                  balance={usdcBalance ?? 0}
+                  disabled={
+                    !connected || isBalanceLoading || usdcBalance === null
+                  }
                 />
-              </>
-            )}
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {organization ? (
