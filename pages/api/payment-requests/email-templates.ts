@@ -146,16 +146,21 @@ export function createPaymentRequestEmailHtml({
             
             <div class="section">
               <div class="section-title">${
-                type === "requester" ? "Recipient" : "Requester"
+                type === "requester" ? "Payer" : "Requester"
               }:</div>
               <div>${
-                paymentRequest.metadata?.payment_request
-                  ?.creator_organization_name ||
-                "Organization name not provided"
+                type === "requester"
+                  ? paymentRequest.metadata?.payment_request
+                      ?.payer_organization_name
+                  : paymentRequest.metadata?.payment_request
+                      ?.creator_organization_name ||
+                    "Organization name not provided"
               }</div>
               <div>${
-                paymentRequest.metadata?.payment_request?.creator_email ||
-                "No email provided"
+                type === "requester"
+                  ? paymentRequest.metadata?.payment_request?.payer_email
+                  : paymentRequest.metadata?.payment_request?.creator_email ||
+                    `No ${type} email provided`
               }</div>
             </div>
 

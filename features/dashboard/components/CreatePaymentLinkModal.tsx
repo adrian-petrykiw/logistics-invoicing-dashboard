@@ -255,7 +255,12 @@ export function CreatePaymentLinkModal({
             : {
                 id: selectedVendor,
               },
-        receiving_organization_id: organization.id,
+        receiving_organization: {
+          id: organization.id,
+          name: organization.name,
+          multisig_wallet: organization.multisig_wallet,
+          business_details: organization.business_details,
+        },
         token_mint: USDC_MINT,
         amount: data.invoices.reduce((sum, inv) => sum + inv.amount, 0),
         recipient: {
@@ -346,7 +351,7 @@ export function CreatePaymentLinkModal({
 
       await queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success("Payment request sent!");
-      resetFormState(); // Reset form state on successful submission
+      resetFormState();
       onClose();
     } catch (error) {
       console.error("Failed to create payment request:", error);

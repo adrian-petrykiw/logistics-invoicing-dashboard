@@ -1,7 +1,6 @@
 import { NextApiResponse } from "next";
 import { withAuth, AuthedRequest } from "@/pages/api/_lib/auth";
 import { ApiResponse, TransactionRecord } from "@/types/transaction";
-import { mapTransactionToEmailTemplate } from "@/utils/email-mapper";
 import { supabaseAdmin } from "../_lib/supabase";
 import { emailService } from "./email-service";
 import { createPaymentRequestEmailHtml } from "./email-templates";
@@ -30,7 +29,15 @@ const PaymentRequestSchema = z.object({
           "Either provide organization.id OR both organization.name and organization.email, but not both",
       }
     ),
-  receiving_organization_id: z.string().uuid(),
+  receiving_organization: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    multisig_wallet: z.string(),
+    business_details: z.object({
+      companyName: z.string(),
+      companyEmail: z.string().email(),
+    }),
+  }),
   creator_email: z.string().email(),
   token_mint: z.string(),
   amount: z.number(),
@@ -181,11 +188,9 @@ async function handler(
             notes: input.notes,
             creator_email: input.creator_email,
             creator_wallet_address: req.user.walletAddress,
-            creator_organization_id: input.receiving_organization_id,
+            creator_organization_id: input.receiving_organization.id,
             creator_organization_name:
-              currentRecipientOrg?.business_details.companyName ||
-              input.sending_organization.name ||
-              "Organization name not provided",
+              input.receiving_organization.business_details.companyName,
           },
         },
         created_by: user.id,
@@ -201,7 +206,26 @@ async function handler(
 
     // Handle email notifications
     try {
-      const emailData = mapTransactionToEmailTemplate(transaction);
+      const emailPaymentRequest = {
+        id: transaction.id,
+        amount: transaction.amount,
+        due_date: transaction.due_date || "",
+        metadata: {
+          payment_request: {
+            creator_email: input.creator_email,
+            creator_organization_name:
+              input.receiving_organization.business_details.companyName,
+            payer_email:
+              input.sending_organization.email ||
+              currentRecipientOrg?.business_details?.companyEmail,
+            payer_organization_name:
+              input.sending_organization.name ||
+              currentRecipientOrg?.business_details?.companyName,
+            notes: input.notes,
+          },
+        },
+        invoices: transaction.invoices,
+      };
 
       // Send email to recipient organization (future sender)
       await emailService.sendEmail(
@@ -209,7 +233,7 @@ async function handler(
         "New Payment Request",
         createPaymentRequestEmailHtml({
           type: "recipient",
-          paymentRequest: emailData,
+          paymentRequest: emailPaymentRequest,
         })
       );
 
@@ -219,7 +243,7 @@ async function handler(
         "Payment Request Created",
         createPaymentRequestEmailHtml({
           type: "requester",
-          paymentRequest: emailData,
+          paymentRequest: emailPaymentRequest,
         })
       );
     } catch (emailError: any) {

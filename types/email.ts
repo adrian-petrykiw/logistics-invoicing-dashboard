@@ -6,6 +6,8 @@ export interface EmailTemplatePaymentRequest {
     payment_request?: {
       creator_email?: string;
       creator_organization_name?: string;
+      payer_email?: string;
+      payer_organization_name?: string;
       notes?: string;
     };
   };
